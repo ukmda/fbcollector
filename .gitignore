@@ -1,0 +1,5 @@
+dist/**
+build/**
+config.ini
+fireballCollector.spec
+README.html

@@ -1,0 +1,75 @@
+name: Build Fireball Analyser
+#env:
+#  AWS_REGION: eu-west-2
+#permissions:
+#  id-token: write
+#  contents: read
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [master]
+jobs:
+  local_tests:
+    name: local test stage
+    runs-on: win10
+    steps:
+      - name: "checkout repository"
+        uses: actions/checkout@v4
+      - name: testing
+        run: |
+          echo "hello from test"
+          conda activate fbcollector
+          dir
+  build_fbtool:
+    name: build fbcollector
+    runs-on: win10
+    needs: local_tests
+    steps:
+      - name: building
+        run: |
+          echo "running build step"
+          conda activate fbcollector
+          cd fbCollector
+          pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
+          markdown2 ./README.md > README.html
+  package_fbtool:
+    name: package fbcollector
+    runs-on: win10
+    needs:
+      - build_fbtool
+    steps:
+      - name: packaging
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: .\fbCollector\fireballcollector_setup.iss
+  release_fbtool:
+    name: release fbcollector
+    runs-on: win10
+    needs:
+      - package_fbtool
+    steps:
+      - name: release
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.MM_PAT }}
+        with:
+          file: e:\temp\setup_fireballCollector.exe
+          tags: true
+          draft: true
+          overwrite: true
+          tag_name: 2025.11.1
+          default_release_name: Tools to Gather Fireball data and Manage UKMON Cameras
+          default_release_body_path: fbCollector\README.md
+  cleanup_fbtool:
+    name: clean up temp fbcollector files
+    runs-on: win10
+    continue-on-error: true
+    needs:
+      - release_fbtool
+    steps:
+      - name: delete package
+        run: |
+          del e:\temp\setup_fireballCollector.exe
