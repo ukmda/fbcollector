@@ -32,7 +32,6 @@ jobs:
         run: |
           echo "running build step"
           conda activate fbcollector
-          cd fbCollector
           pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
           markdown2 ./README.md > README.html
   package_fbtool:
