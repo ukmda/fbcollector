@@ -20,9 +20,8 @@ jobs:
         uses: actions/checkout@v4
       - name: testing
         run: |
-          echo "hello from test"
           conda activate fbcollector
-          dir
+          pytest -v ./tests --cov=. --cov-report=term-missing
   build_fbtool:
     name: build fbcollector
     runs-on: win10
