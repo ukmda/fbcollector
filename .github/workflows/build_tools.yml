@@ -43,7 +43,7 @@ jobs:
       - name: packaging
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
-          path: .\fbCollector\fireballcollector_setup.iss
+          path: .\fireballcollector_setup.iss
   release_fbtool:
     name: release fbcollector
     runs-on: win10
