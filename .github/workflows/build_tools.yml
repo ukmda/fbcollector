@@ -53,7 +53,7 @@ jobs:
       - name: release
         uses: xresloader/upload-to-github-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.MM_PAT }}
+          GITHUB_TOKEN: ${{ secrets.UKMDA_MM_PAT }}
         with:
           file: e:\temp\setup_fireballCollector.exe
           tags: true
