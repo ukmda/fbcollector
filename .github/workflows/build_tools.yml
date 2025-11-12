@@ -21,6 +21,7 @@ jobs:
       - name: testing
         run: |
           conda activate fbcollector
+          pip install -r requirements.txt
           pytest -v ./tests --cov=. --cov-report=term-missing
   build_fbtool:
     name: build fbcollector

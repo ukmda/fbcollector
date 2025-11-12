@@ -8,3 +8,5 @@ xmltodict
 requests
 pandas
 markdown2
+pytest
+pytest-cov
