@@ -18,7 +18,7 @@ PrivilegesRequired=lowest
 Source: ".\dist\fireballCollector.exe"; DestDir: "{app}"
 Source: ".\noimage.jpg"; DestDir: "{app}"
 Source: ".\ukmda.ico"; DestDir: "{app}"
-Source: ".\download_events.sh"; DestDir: "{app}";AfterInstall: AdjustTextFile;
+Source: ".\download_events.sh"; DestDir: "{app}";AfterInstall: DOS2Unux;
 Source: ".\config.ini.sample"; DestDir: "{app}"; Permissions: users-modify
 Source: ".\README.html"; DestDir: "{app}"
 
@@ -31,13 +31,15 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\fireballCollector.exe"; Tasks: desktopicon; WorkingDir: {app}; IconFilename: "{app}\ukmda.ico"
 
 [code]
-procedure AdjustTextFile();
+procedure DOS2Unux();
 var
   path : String;
-  data : String;
+  data : AnsiString;
+  stdstr: String;
 begin
   path := ExpandConstant(CurrentFileName)
   LoadStringFromFile(path, data);
-  StringChangeEx(data, #13#10, #10, True);
-  SaveStringToFile(path, data, False);
+  stdstr:= String(data);
+  StringChangeEx(stdstr, #13#10, #10, True);
+  SaveStringToFile(path, AnsiString(stdstr), False);
 end;
