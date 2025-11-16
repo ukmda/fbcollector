@@ -18,7 +18,7 @@ PrivilegesRequired=lowest
 Source: ".\dist\fireballCollector.exe"; DestDir: "{app}"
 Source: ".\noimage.jpg"; DestDir: "{app}"
 Source: ".\ukmda.ico"; DestDir: "{app}"
-Source: ".\download_events.sh"; DestDir: "{app}"
+Source: ".\download_events.sh"; DestDir: "{app}";AfterInstall: AdjustTextFile;
 Source: ".\config.ini.sample"; DestDir: "{app}"; Permissions: users-modify
 Source: ".\README.html"; DestDir: "{app}"
 
@@ -29,3 +29,15 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "{group}\Fireball Analyser"; Filename: "{app}\fireballCollector.exe"; IconFilename: "{app}\ukmda.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\fireballCollector.exe"; Tasks: desktopicon; WorkingDir: {app}; IconFilename: "{app}\ukmda.ico"
+
+[code]
+procedure AdjustTextFile();
+var
+  path : String;
+  data : String;
+begin
+  path := ExpandConstant(CurrentFileName)
+  LoadStringFromFile(path, data);
+  StringChangeEx(data, #13#10, #10, True);
+  SaveStringToFile(path, data, False);
+end;
