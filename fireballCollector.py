@@ -62,6 +62,36 @@ def showConfig():
     procid.wait()
 
 
+def getSummaryText(txtfile):
+    res = []
+    lis = open(txtfile,'r').readlines()
+    for i in range(0, len(lis)):
+        currli = lis[i].strip()
+        if 'Timing offsets ' in currli:
+            while currli != '':
+                res.append(currli.split('+/-')[0])
+                i =i+1
+                currli = lis[i].strip()
+            res.append('')
+        if 'Orbit:' in currli:
+            while currli != '':
+                if 'Pi' in currli:
+                    i = i+6 # skip some orbital parameters
+                else:
+                    res.append(currli.split('+/-')[0])
+                i =i+1
+                currli = lis[i].strip()
+            res.append('')
+        if 'point on the trajectory:' in currli:
+            while currli != '':
+                if 'MSL' not in currli and currli.split('+/-')[0].strip() !='':
+                    res.append(currli.split('+/-')[0])
+                i =i+1
+                currli = lis[i].strip()
+            res.append('')
+    return '\n'.join(res)
+
+
 class StyledButton(Button):
     """ Button with style. 
     """
@@ -463,7 +493,7 @@ class fbCollector(Frame):
         except:
             noimage = None
 
-        self.imagelabel = Label(self, image = noimage)
+        self.imagelabel = Label(self, image = noimage, textvariable='')
         self.imagelabel.image = noimage
         self.imagelabel.grid(row=3, column=3, rowspan = 4, columnspan = 3)
 
@@ -503,7 +533,7 @@ class fbCollector(Frame):
         except:
             pass
         os.makedirs(os.path.join(self.dir_path,'ecsvs'), exist_ok=True)
-        ecsvfs = glob.glob1(dirname, '*.ecsv')
+        ecsvfs = glob.glob('*.ecsv', root_dir=dirname)
         for ecsv in ecsvfs:
             shutil.copyfile(os.path.join(dirname, ecsv), os.path.join(self.dir_path, 'ecsvs', ecsv))
 
@@ -587,7 +617,7 @@ class fbCollector(Frame):
     def viewSolution(self):
         self.review_stack = False
         if not self.soln_outputdir:
-            solndir = glob.glob1(self.dir_path, os.path.split(self.dir_path)[1][:8]+'*')
+            solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
             if len(solndir) == 0:
                 tkMessageBox.showinfo('Warning', 'No solution to review')
@@ -602,7 +632,7 @@ class fbCollector(Frame):
     
     def removeSolution(self):
         if not self.soln_outputdir:
-            solndir = glob.glob1(self.dir_path, os.path.split(self.dir_path)[1][:8]+'*')
+            solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             if len(solndir) == 0:
                 tkMessageBox.showinfo('Warning', 'No solution to remove')
                 return
@@ -658,7 +688,7 @@ class fbCollector(Frame):
             statid = current_image[3:9]
             datestr = current_image[10:29]
         else:
-            return
+            return False
         #dtval = datetime.datetime.strptime(datestr, '%Y%m%d_%H%M%S')
         #datestr = dtval.strftime('%Y-%m-%dT%H:%M:%S')
         try:
@@ -667,12 +697,9 @@ class fbCollector(Frame):
                 if 'issue getting data' in li:
                     return False
             os.makedirs(os.path.join(self.dir_path,'ecsvs'), exist_ok=True)
-            ecsvfs = glob.glob1(os.path.join(self.dir_path, statid), '*.ecsv')
+            ecsvfs = glob.glob('*.ecsv', root_dir=os.path.join(self.dir_path, statid))
             for ecsv in ecsvfs:
                 shutil.copyfile(os.path.join(self.dir_path, statid, ecsv), os.path.join(self.dir_path, 'ecsvs', ecsv))
-
-            shutil.copyfile()
-            ## finish here
             return True
         except Exception:
             return False
@@ -780,7 +807,7 @@ class fbCollector(Frame):
                 log.warning(e)
 
     def correct_datafile_name(self, line):
-        if ('.jpg' in line or '.png' in line) and 'noimage' not in line:
+        if ('.jpg' in line or '.png' in line or '_report.txt' in line) and 'noimage' not in line:
             return True
         return False
     
@@ -847,12 +874,18 @@ class fbCollector(Frame):
         except:
             return 0
         
-        with img.open(self.current_image).resize((640,360)) as imgdata:
-            thisimage = ImageTk.PhotoImage(imgdata)
-            self.imagelabel.configure(image = thisimage)
-            self.imagelabel.image = thisimage
-
-        self.timestamp_label.configure(text = os.path.split(self.current_image)[1])
+        if '_report.txt' not in self.current_image:
+            with img.open(self.current_image).resize((640,360)) as imgdata:
+                thisimage = ImageTk.PhotoImage(imgdata)
+                self.imagelabel.configure(image=thisimage, text='')
+                self.imagelabel.image = thisimage
+            self.timestamp_label.configure(text = os.path.split(self.current_image)[1])
+        else:
+            summarytxt = getSummaryText(self.current_image)
+            self.imagelabel.configure(text=summarytxt)
+            self.imagelabel.image = None
+            self.timestamp_label.configure(text = '')
+            # FIXME
         return 
 
     def clean_folder(self):
@@ -969,7 +1002,7 @@ class fbCollector(Frame):
         return 
 
     def getVids(self):
-        jpglist = glob.glob1(os.path.join(self.dir_path,'jpgs'), 'FF*.jpg')
+        jpglist = glob.glob('FF*.jpg', root_dir=os.path.join(self.dir_path,'jpgs'))
         os.makedirs(os.path.join(self.dir_path, 'mp4s'), exist_ok=True)
         count = 0
         for jpg in jpglist:
