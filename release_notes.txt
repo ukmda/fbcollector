@@ -1,0 +1,4 @@
+Release notes for Fireball Collector and Analyser
+
+2025.11.1
+Repackaged for standalone repository.

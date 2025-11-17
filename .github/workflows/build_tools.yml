@@ -57,11 +57,11 @@ jobs:
         with:
           file: e:\temp\setup_fireballCollector.exe
           tags: true
-          draft: true
+          #draft: true
           overwrite: true
           tag_name: 2025.11.1
-          default_release_name: Tool to Gather Fireball data 
-          default_release_body_path: README.md
+          # default_release_name: Tool to Gather Fireball data 
+          default_release_body_path: ./release_notes.txt
   cleanup_fbtool:
     name: clean up temp fbcollector files
     runs-on: win10
