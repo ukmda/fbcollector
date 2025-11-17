@@ -305,17 +305,16 @@ class fbCollector(Frame):
         if localcfg.has_option('solver','wmpl_loc'):
             self.wmpl_loc = os.path.expanduser(localcfg['solver']['wmpl_loc'].replace('$HOME','~')).replace('\\','/')
             self.wmpl_env= localcfg['solver']['wmpl_env']
-        log.info(f'wmpl_loc {self.wmpl_loc}')
 
         self.rms_loc = None
         if localcfg.has_option('reduction','rms_loc'):
             self.rms_loc = os.path.expanduser(localcfg['reduction']['rms_loc'].replace('$HOME','~')).replace('\\','/')
             self.rms_env = localcfg['reduction']['rms_env']
 
-
         self.share_loc = None
         if localcfg.has_option('sharing','shrfldr'):
             self.share_loc = os.path.expanduser(localcfg['sharing']['shrfldr'].replace('$HOME','~')).replace('\\','/')
+        return 
 
     def quitApplication(self):
         print('quitting')
@@ -500,6 +499,7 @@ class fbCollector(Frame):
         # Timestamp label
         self.timestamp_label = Label(self, text = "CCNNNN YYYY-MM-DD HH:MM.SS.mms", font=("Courier", 12))
         self.timestamp_label.grid(row = 7, column = 3, sticky = "E")
+        log.info('initUI completed')
 
     def reviewConfig(self):
         showConfig()
