@@ -1,4 +1,7 @@
 Release notes for Fireball Collector and Analyser
 
-2025.11.1
+A tool to collect data on fireballs and other interesting meteors from the UK and Global Meteor Networks
+and to analyse the data.
+
+2025.11.2
 Repackaged for standalone repository.
