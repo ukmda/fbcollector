@@ -615,16 +615,56 @@ class fbCollector(Frame):
         tkMessageBox.showinfo('Info', 'Solver Finished')
         return 
     
+    def createGraphs(self):
+        pickles=[]
+        for path, _, files in os.walk(self.dir_path):
+            for name in files:
+                if '.pickle' in name and 'tmpzip' not in path:
+                    pickles.append(os.path.join(path, name))
+        if len(pickles) == 0:
+            return False
+        pickles = list(set(pickles))
+        if len(pickles) == 1:
+            pickfile = pickles[0]
+        else:
+            pickfile = tkFileDialog.askopenfilename(title='Select Orbit Pickle', defaultextension='*.pickle',
+                                        initialdir=self.dir_path, initialfile='*.pickle',
+                                        filetypes=[('pickles','*.pickle')])
+        if not pickfile:
+            return False
+
+        tmppy = os.path.join(os.getenv('TEMP'), 'docharts.py')
+        with open(tmppy, 'w') as outf:
+            pickdir, pickfile = os.path.split(pickfile)
+            outf.write('from wmpl.Utils.Pickling import loadPickle\nimport os\n')
+            outf.write(f"traj=loadPickle('{pickdir}', '{pickfile}')\n")
+            outf.write(f"outdir=os.path.join('{self.dir_path}', traj.file_name)\n")
+            outf.write('traj.savePlots(outdir,traj.file_name, show_plots=False)\n')
+        tmpscr = os.path.join(os.getenv('TEMP'), 'docharts.ps1')
+        with open(tmpscr, 'w') as outf:
+            outf.write(f'conda activate {self.wmpl_env}\n')
+            outf.write(f'$env:PYTHONPATH="{self.wmpl_loc}"\n')
+            outf.write(f'python {tmppy}\n')
+        _ = subprocess.run(['powershell.exe', tmpscr])
+        os.remove(tmpscr)
+        os.remove(tmppy)
+        return True
+    
     def viewSolution(self):
         self.review_stack = False
         if not self.soln_outputdir:
             solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
             if len(solndir) == 0:
-                tkMessageBox.showinfo('Warning', 'No solution to review')
-                return
+                log.info('attempting to create graphs')
+                if not self.createGraphs():
+                    tkMessageBox.showinfo('Warning', 'No solution to review')
+                    return
+                solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
+                solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
             solndir = os.path.join(self.dir_path, solndir[0])
             self.soln_outputdir = solndir
+            log.info(f'solution dir is {solndir}')
         bin_list = [line for line in os.listdir(self.soln_outputdir) if self.correct_datafile_name(line)]
         for b in bin_list:
             self.selected[b] = (0, '')
@@ -757,6 +797,7 @@ class fbCollector(Frame):
         bin_list = self.get_bin_list()
         for b in bin_list:
             self.selected[b] = (0, '')
+        log.info(f'analysing {self.dir_path}')
         self.update_listbox(bin_list)
 
     def openFolder(self):
