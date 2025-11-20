@@ -607,23 +607,40 @@ class fbCollector(Frame):
         camid = current_image[3:9]
         log.info(f'selected camera is {camid}')
         dirname = os.path.join(self.dir_path, camid)
-        if platform.system() == 'Windows':    # Windows has to be awkward            
+        if not os.path.isfile(os.path.join(dirname, '.config')):
+            tkMessageBox.showinfo("Warning", "No camera .config file, can't proceed")
+            return             
+        fflist = glob.glob(os.path.join(dirname,'FF*.fits'))
+        frlist = glob.glob(os.path.join(dirname,'FR*.bin'))
+        log.info(f'Found {len(fflist)} FFs and {len(frlist)} FRs')
+        if len(fflist) == 0 and len(frlist) == 0:
+            tkMessageBox.showinfo("Warning", "No FF or FR files to reduce")
+            return 
+        if platform.system() == 'Windows':    # Windows has to be awkward
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.ps1')
             shellname = 'powershell.exe'
         else:
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
-
         with open(tmpscr, 'w') as outf:
-            outf.write(f'cd {self.rms_loc}\nconda activate {self.rms_env}\npython -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            outf.write(f'cd {self.rms_loc}\n')
+            if platform.system() != 'Windows':    # Windows has to be awkward
+                outf.write('eval "$(conda shell.bash hook)"\n')
+            outf.write(f'conda activate {self.rms_env}\n')
+            outf.write(f'python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+
         _ = subprocess.run([shellname, tmpscr])
         frs = glob.glob(os.path.join(dirname, 'FR*.bin'))
         if len(frs) > 0:
             if tkMessageBox.askyesno("Rerun", f'{len(frs)} FR files detected - rerun?'):
                 for fr in frs:
                     with open(tmpscr, 'w') as outf:
-                        outf.write(f'cd {self.rms_loc}\nconda activate {self.rms_env}\npython -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
-                    _ = subprocess.run([shellname, tmpscr])
+                        outf.write(f'cd {self.rms_loc}\n')
+                        if platform.system() != 'Windows':    # Windows has to be awkward
+                            outf.write('eval "$(conda shell.bash hook)"\n')
+                        outf.write(f'conda activate {self.rms_env}\n')
+                        outf.write(f'python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                    subprocess.run([shellname, tmpscr])
         try:
             os.remove(tmpscr)
         except:
@@ -698,7 +715,10 @@ class fbCollector(Frame):
             shellname = 'bash'
         with open(tmpscr, 'w') as outf:
             mcruns = 20
-            outf.write(f'cd {self.wmpl_loc}\nconda activate {self.wmpl_env}\npython -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
+            outf.write(f'cd {self.wmpl_loc}\n')
+            if platform.system() != 'Windows':
+                outf.write('eval "$(conda shell.bash hook)"\n')
+            outf.write(f'conda activate {self.wmpl_env}\npython -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
         _ = subprocess.run([shellname, tmpscr])
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
@@ -746,6 +766,8 @@ class fbCollector(Frame):
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.sh')
             shellname = 'bash'
         with open(tmpscr, 'w') as outf:
+            if platform.system() != 'Windows':
+                outf.write('eval "$(conda shell.bash hook)"\n')
             outf.write(f'conda activate {self.wmpl_env}\n')
             outf.write(f'$env:PYTHONPATH="{self.wmpl_loc}"\n')
             outf.write(f'python {tmppy}\n')
