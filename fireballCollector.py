@@ -34,7 +34,7 @@ from tkinter.ttk import Label, Style, LabelFrame, Scrollbar
 from PIL import Image as img
 from PIL import ImageTk
 
-appversion = "2025.11.2"
+appversion = "2025.11.3"
 
 config_file = ''
 noimg_file = ''
