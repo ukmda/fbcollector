@@ -60,8 +60,7 @@ def editTextFile(targfile=None):
     opencmd = 'open'
     if platform.system() == 'Windows':    # Windows has to be awkward
         opencmd = 'notepad.exe'
-    proc = subprocess.run([opencmd, targfile])
-    proc.wait()
+    subprocess.run([opencmd, targfile])
     return
 
 
@@ -220,7 +219,7 @@ class cfgDialog(Dialog):
         self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
         self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
         self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
-        self.cfgdata['gmn']['hmnuser'] = self.gmnuser_box.get().strip()
+        self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
         self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
         saveConfig(self.cfgdata)
         self.destroy()
@@ -1216,6 +1215,8 @@ class fbCollector(Frame):
         scpcli = SCPClient(c.get_transport())
         log.info('getting Watchlist')
         scpcli.get('./event_watchlist.txt', self.fb_dir)
+        scpcli.close()
+        c.close()
         self.viewWatchlist()
 
     def putWatchlist(self):
