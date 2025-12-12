@@ -376,7 +376,7 @@ class fbCollector(Frame):
         self.gmn_user = None
         self.gmn_server = None
         if localcfg.has_option('gmn','gmnkey'):
-            self.gmn_key = os.path.expanduser(localcfg['gmn']['gmnkey'])
+            self.gmn_key = localcfg['gmn']['gmnkey']
             self.gmn_user = localcfg['gmn']['gmnuser']
             self.gmn_server = localcfg['gmn']['gmnserver']
 
@@ -1266,8 +1266,9 @@ class fbCollector(Frame):
             drv = fbdir[0].lower()
             fbdir = '/mnt/' + drv + fbdir[2:]
         fbdir = fbdir.replace('\\','/')
-
-        cmd = os.path.join(self.script_loc, 'download_events.sh') + f' {evtdate} {fbdir} 1'
+        gmnserver = f'{self.gmn_user}@{self.gmn_server}'
+        gmnkey = self.gmn_key
+        cmd = os.path.join(self.script_loc, 'download_events.sh') + f' {evtdate} {fbdir} 1 {gmnserver} {gmnkey}'
         if ':' in cmd:
             drv = cmd[0].lower()
             cmd = '/mnt/' + drv + cmd[2:]
