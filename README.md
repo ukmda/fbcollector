@@ -19,6 +19,9 @@ The following are optional:
 * First install WMPL and RMS in their own Conda environments and verify they're working. 
 * Then install this package `setup_fireballCollector.exe` from [here](https://github.com/ukmda/fbcollector/releases).
 
+### Linux Support
+The app should also work on Linux. You will need to create a conda or python virtualenv named `fbcollector`, activate it and then clone this repo and install the requirements via `pip install -r requirements.txt`. You should then be able to run the programme by typing `python fireballCollector.py`
+
 ## Configuration
 * The first time you launch the app, a text editor will appear to allow you to configure the application.
 * Update at least the values of `basedir`, `rms_loc`, `rms_env`, `wmpl_loc`, and `wmpl_env` as appropriate and save. 
