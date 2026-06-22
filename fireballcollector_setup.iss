@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=UKMON Fireball Analyser
-AppVersion=2025.11.3
+AppVersion=2026.6.0
 AppPublisher=UK Meteor Network
 AppPublisherURL=https://www.ukmeteornetwork.org
 DefaultDirName={localappdata}\programs\fbAnalyser
