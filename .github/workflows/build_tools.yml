@@ -80,7 +80,8 @@ jobs:
         uses: actions/checkout@v4
       - name: testing
         run: |
-          conda create -y -n fbcollector python=3.11
-          conda activate fbcollector
+          $env:path="c:\miniconda;$env:path"
+          c:\miniconda\scripts\conda create -y -n fbcollector python=3.11
+          c:\miniconda\scripts\conda activate fbcollector
           pip install -r requirements.txt
           pytest -v ./tests --cov=. --cov-report=term-missing
