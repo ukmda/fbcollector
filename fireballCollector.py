@@ -627,6 +627,7 @@ class fbCollector(Frame):
             if platform.system() != 'Windows':    # Windows has to be awkward
                 outf.write('eval "$(conda shell.bash hook)"\n')
             outf.write(f'conda run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            outf.write('pause\n')
 
         _ = subprocess.run([shellname, tmpscr])
         frs = glob.glob(os.path.join(dirname, 'FR*.bin'))
@@ -638,6 +639,7 @@ class fbCollector(Frame):
                         if platform.system() != 'Windows':    # Windows has to be awkward
                             outf.write('eval "$(conda shell.bash hook)"\n')
                         outf.write(f'conda run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                        outf.write('pause\n')
                     _ = subprocess.run([shellname, tmpscr])
         try:
             os.remove(tmpscr)
@@ -717,6 +719,7 @@ class fbCollector(Frame):
             if platform.system() != 'Windows':
                 outf.write('eval "$(conda shell.bash hook)"\n')
             outf.write(f'conda run -n {self.wmpl_env} python -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
+            outf.write('pause\n')
         _ = subprocess.run([shellname, tmpscr])
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
