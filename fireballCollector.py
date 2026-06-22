@@ -97,6 +97,16 @@ def getSummaryText(txtfile):
 def loadConfig():
     localcfg = configparser.ConfigParser()
     localcfg.read(config_file)
+    if 'conda' not in localcfg['Fireballs']:
+        conda_exe = os.getenv('CONDA_EXE')
+        if conda_exe is None: 
+            if platform.system() == 'Windows':    # Windows has to be awkward
+                conda_exe = os.expanduser('~/miniconda3/Scripts/conda.exe')
+            else:
+                conda_exe = os.expanduser('~/miniconda3/bin/conda')            
+        if conda_exe is None: 
+            conda_exe = ''
+        localcfg['Fireballs']['conda'] = conda_exe
     return localcfg
 
 
@@ -178,6 +188,11 @@ class cfgDialog(Dialog):
         self.ukmonapikey_box = tk.Entry(frame, width=50)
         self.ukmonapikey_box.insert(tk.END, self.cfgdata['ukmon']['apikey'])
 
+        # conda location
+        self.conda_label = tk.Label(frame, width=25, text="Conda Location", anchor='w')
+        self.conda_box = tk.Entry(frame, width=50)
+        self.conda_box.insert(tk.END, self.cfgdata['Fireballs']['conda'])
+
         # now put into grid
         self.basedir_label.grid(column=0, row=0)
         self.basedir_box.grid(column=1, row=0)
@@ -208,6 +223,10 @@ class cfgDialog(Dialog):
         self.ukmon_label.grid(column=0, row=13)
         self.ukmonapikey_label.grid(column=0, row=14)
         self.ukmonapikey_box.grid(column=1, row=14)
+
+        self.conda_label.grid(column=0, row=16)
+        self.conda_box.grid(column=1, row=16)
+
         return
 
     def ok_pressed(self):
@@ -221,6 +240,7 @@ class cfgDialog(Dialog):
         self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
         self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
         self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
+        self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
         saveConfig(self.cfgdata)
         self.destroy()
 
@@ -341,6 +361,7 @@ class fbCollector(Frame):
         self.soln_outputdir = None
         self.log_files_to_keep = 30
         self.script_loc = os.path.split(config_file)[0]
+        self.conda_exe = ''
 
         self.readConfig()
 
@@ -404,6 +425,9 @@ class fbCollector(Frame):
         self.share_loc = None
         if localcfg.has_option('sharing','shrfldr'):
             self.share_loc = os.path.expanduser(localcfg['sharing']['shrfldr'].replace('$HOME','~')).replace('\\','/')
+
+        self.conda_exe = localcfg['Fireballs']['conda']
+        log.info(f'conda is {self.conda_exe}')
         return 
 
     def quitApplication(self):
@@ -619,16 +643,14 @@ class fbCollector(Frame):
         if platform.system() == 'Windows':    # Windows has to be awkward
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.ps1')
             shellname = 'powershell.exe'
-            conda_exe = os.getenv('CONDA_EXE')
         else:
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
-            condaexe = 'conda'
         with open(tmpscr, 'w') as outf:
             outf.write(f'cd {self.rms_loc}\n')
             if platform.system() != 'Windows':    # Windows has to be awkward
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
             outf.write('pause\n')
 
         _ = subprocess.run([shellname, tmpscr])
@@ -640,7 +662,7 @@ class fbCollector(Frame):
                         outf.write(f'cd {self.rms_loc}\n')
                         if platform.system() != 'Windows':    # Windows has to be awkward
                             outf.write('eval "$(conda shell.bash hook)"\n')
-                        outf.write(f'conda run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                        outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                         outf.write('pause\n')
                     _ = subprocess.run([shellname, tmpscr])
         try:
