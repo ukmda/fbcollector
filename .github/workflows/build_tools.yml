@@ -36,12 +36,6 @@ jobs:
           pip install pyinstaller
           pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
           markdown2 ./README.md > README.html
-  package_fbtool:
-    name: package fbcollector
-    runs-on: windows-latest
-    needs:
-      - build_fbtool
-    steps:
       - name: "checkout repository"
         uses: actions/checkout@v4
       - name: packaging
