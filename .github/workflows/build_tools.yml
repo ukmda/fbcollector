@@ -25,13 +25,14 @@ jobs:
           pytest -v ./tests --cov=. --cov-report=term-missing
   build_fbtool:
     name: build fbcollector
-    runs-on: win10
+    runs-on: windows-latest
     needs: local_tests
     steps:
       - name: building
         run: |
           echo "running build step"
-          conda activate fbcollector
+          # conda activate fbcollector
+          pip install -r requirements.txt
           pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
           markdown2 ./README.md > README.html
   package_fbtool:
@@ -81,7 +82,5 @@ jobs:
       - name: testing
         run: |
           $env:path="c:\miniconda;$env:path"
-          c:\miniconda\scripts\conda create -y -n fbcollector python=3.11
-          c:\miniconda\scripts\conda activate fbcollector
           pip install -r requirements.txt
           pytest -v ./tests --cov=. --cov-report=term-missing
