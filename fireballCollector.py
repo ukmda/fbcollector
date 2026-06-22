@@ -619,14 +619,16 @@ class fbCollector(Frame):
         if platform.system() == 'Windows':    # Windows has to be awkward
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.ps1')
             shellname = 'powershell.exe'
+            conda_exe = os.getenv('CONDA_EXE')
         else:
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
+            condaexe = 'conda'
         with open(tmpscr, 'w') as outf:
             outf.write(f'cd {self.rms_loc}\n')
             if platform.system() != 'Windows':    # Windows has to be awkward
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
             outf.write('pause\n')
 
         _ = subprocess.run([shellname, tmpscr])
