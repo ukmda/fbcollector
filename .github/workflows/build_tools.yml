@@ -72,3 +72,15 @@ jobs:
       - name: delete package
         run: |
           del e:\temp\setup_fireballCollector.exe
+  tests:
+    name: local test stage
+    runs-on: windows-latest
+    steps:
+      - name: "checkout repository"
+        uses: actions/checkout@v4
+      - name: testing
+        run: |
+          conda create -y -n fbcollector python=3.11
+          conda activate fbcollector
+          pip install -r requirements.txt
+          pytest -v ./tests --cov=. --cov-report=term-missing
