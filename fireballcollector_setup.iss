@@ -10,7 +10,7 @@ DefaultGroupName=UKMON
 UninstallDisplayIcon={app}\fireballCollector.exe
 Compression=lzma2
 SolidCompression=yes
-OutputDir=e:\temp
+OutputDir=.
 OutputBaseFilename=setup_fireballCollector
 PrivilegesRequired=lowest
 

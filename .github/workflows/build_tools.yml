@@ -14,13 +14,12 @@ on:
 jobs:
   local_tests:
     name: local test stage
-    runs-on: win10
+    runs-on: windows-latest
     steps:
       - name: "checkout repository"
         uses: actions/checkout@v4
       - name: testing
         run: |
-          conda activate fbcollector
           pip install -r requirements.txt
           pytest -v ./tests --cov=. --cov-report=term-missing
   build_fbtool:
@@ -31,13 +30,12 @@ jobs:
       - name: building
         run: |
           echo "running build step"
-          # conda activate fbcollector
           pip install -r requirements.txt
           pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
           markdown2 ./README.md > README.html
   package_fbtool:
     name: package fbcollector
-    runs-on: win10
+    runs-on: windows-latest
     needs:
       - build_fbtool
     steps:
@@ -47,7 +45,7 @@ jobs:
           path: .\fireballcollector_setup.iss
   release_fbtool:
     name: release fbcollector
-    runs-on: win10
+    runs-on: windows-latest
     needs:
       - package_fbtool
     steps:
@@ -56,31 +54,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.UKMDA_MM_PAT }}
         with:
-          file: e:\temp\setup_fireballCollector.exe
+          file: .\setup_fireballCollector.exe
           tags: true
           #draft: true
           overwrite: true
           tag_name: 2026.6.1
           # default_release_name: Tool to Gather Fireball data 
           default_release_body_path: ./release_notes.txt
-  cleanup_fbtool:
-    name: clean up temp fbcollector files
-    runs-on: win10
-    continue-on-error: true
-    needs:
-      - release_fbtool
-    steps:
-      - name: delete package
-        run: |
-          del e:\temp\setup_fireballCollector.exe
-  tests:
-    name: local test stage
-    runs-on: windows-latest
-    steps:
-      - name: "checkout repository"
-        uses: actions/checkout@v4
-      - name: testing
-        run: |
-          $env:path="c:\miniconda;$env:path"
-          pip install -r requirements.txt
-          pytest -v ./tests --cov=. --cov-report=term-missing
+#  cleanup_fbtool:
+#    name: clean up temp fbcollector files
+#    runs-on: windows-latest
+#    continue-on-error: true
+#    needs:
+#      - release_fbtool
+#    steps:
+#      - name: delete package
+#        run: |
+#          del .\setup_fireballCollector.exe
