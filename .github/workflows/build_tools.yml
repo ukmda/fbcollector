@@ -59,7 +59,7 @@ jobs:
           tags: true
           #draft: true
           overwrite: true
-          tag_name: 2026.6.0
+          tag_name: 2026.6.1
           # default_release_name: Tool to Gather Fireball data 
           default_release_body_path: ./release_notes.txt
   cleanup_fbtool:

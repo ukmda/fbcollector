@@ -1,5 +1,5 @@
 # A Fireball Collector and Analyser for UKMON and GMN
-Version: 2026.6.0
+Version: 2026.6.1
 
 This tool allows authorised users to collect fireball data from UKMON and GMN and then to reduce and solve it. 
 
