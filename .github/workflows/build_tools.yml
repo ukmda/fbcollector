@@ -27,6 +27,8 @@ jobs:
     runs-on: windows-latest
     needs: local_tests
     steps:
+      - name: "checkout repository"
+        uses: actions/checkout@v4
       - name: building
         run: |
           echo "running build step"
@@ -40,16 +42,12 @@ jobs:
     needs:
       - build_fbtool
     steps:
+      - name: "checkout repository"
+        uses: actions/checkout@v4
       - name: packaging
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
           path: .\fireballcollector_setup.iss
-  release_fbtool:
-    name: release fbcollector
-    runs-on: windows-latest
-    needs:
-      - package_fbtool
-    steps:
       - name: release
         uses: xresloader/upload-to-github-release@v1
         env:
@@ -62,13 +60,3 @@ jobs:
           tag_name: 2026.6.1
           # default_release_name: Tool to Gather Fireball data 
           default_release_body_path: ./release_notes.txt
-#  cleanup_fbtool:
-#    name: clean up temp fbcollector files
-#    runs-on: windows-latest
-#    continue-on-error: true
-#    needs:
-#      - release_fbtool
-#    steps:
-#      - name: delete package
-#        run: |
-#          del .\setup_fireballCollector.exe
