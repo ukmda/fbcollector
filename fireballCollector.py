@@ -626,8 +626,7 @@ class fbCollector(Frame):
             outf.write(f'cd {self.rms_loc}\n')
             if platform.system() != 'Windows':    # Windows has to be awkward
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda activate {self.rms_env}\n')
-            outf.write(f'python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            outf.write(f'conda run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
 
         _ = subprocess.run([shellname, tmpscr])
         frs = glob.glob(os.path.join(dirname, 'FR*.bin'))
@@ -638,9 +637,8 @@ class fbCollector(Frame):
                         outf.write(f'cd {self.rms_loc}\n')
                         if platform.system() != 'Windows':    # Windows has to be awkward
                             outf.write('eval "$(conda shell.bash hook)"\n')
-                        outf.write(f'conda activate {self.rms_env}\n')
-                        outf.write(f'python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
-                    subprocess.run([shellname, tmpscr])
+                        outf.write(f'conda run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                    _ = subprocess.run([shellname, tmpscr])
         try:
             os.remove(tmpscr)
         except:
@@ -718,7 +716,7 @@ class fbCollector(Frame):
             outf.write(f'cd {self.wmpl_loc}\n')
             if platform.system() != 'Windows':
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda activate {self.wmpl_env}\npython -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
+            outf.write(f'conda run -n {self.wmpl_env} python -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
         _ = subprocess.run([shellname, tmpscr])
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
@@ -768,9 +766,7 @@ class fbCollector(Frame):
         with open(tmpscr, 'w') as outf:
             if platform.system() != 'Windows':
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda activate {self.wmpl_env}\n')
-            outf.write(f'$env:PYTHONPATH="{self.wmpl_loc}"\n')
-            outf.write(f'python {tmppy}\n')
+            outf.write(f'conda run -n {self.wmpl_env} python {tmppy}\n')
         _ = subprocess.run([shellname, tmpscr])
         os.remove(tmpscr)
         os.remove(tmppy)
@@ -1406,10 +1402,15 @@ def uploadOrbitGeneric(orbdir, api_key):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--datepatt", type=str, help="date pattern to retrieve")
+    parser.add_argument("-c", "--config", type=str, help="location of config file")
     args = parser.parse_args()
 
-    dir_ = os.getcwd()
-    config_file = os.path.join(dir_, 'config.ini')
+    if args.config:
+        config_file = args.config
+        dir_ = os.path.split(config_file)[0]
+    else:
+        dir_ = os.getcwd()
+        config_file = os.path.join(dir_, 'config.ini')
     if not os.path.isfile(config_file):
         shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
         tkMessageBox.showinfo("Config Missing", 'Please configure before using')
