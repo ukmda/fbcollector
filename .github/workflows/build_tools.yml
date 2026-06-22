@@ -36,8 +36,6 @@ jobs:
           pip install pyinstaller
           pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
           markdown2 ./README.md > README.html
-      - name: "checkout repository"
-        uses: actions/checkout@v4
       - name: packaging
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
