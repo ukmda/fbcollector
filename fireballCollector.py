@@ -740,7 +740,7 @@ class fbCollector(Frame):
             outf.write(f'cd {self.wmpl_loc}\n')
             if platform.system() != 'Windows':
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda run -n {self.wmpl_env} python -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
+            outf.write(f'{self.conda_exe} run -n {self.wmpl_env} python -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
         _ = subprocess.run([shellname, tmpscr])
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
