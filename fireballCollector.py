@@ -323,11 +323,11 @@ def getLiveJpgs(dtstr, outdir=None):
     fromdstr = isodt1.isoformat()[:19]+'.000Z'
     isodt2 = isodt1 + datetime.timedelta(minutes=1)
     todstr = isodt2.isoformat()[:19]+'.000Z'
-    liveimgs = pd.read_json(f'{apiurl}?dtstr={fromdstr}&enddtstr={todstr}&fmt=withxml')
+    liveimgs = pd.read_json(f'{apiurl}?dtstr={fromdstr}&enddtstr={todstr}&fmt=json')
 
     for _, thisimg in liveimgs.iterrows():
         try:
-            jpgurl = thisimg .urls['url']
+            jpgurl = thisimg.urls['url']
             fname = _download(jpgurl, outdir)
             log.info(f'retrieved {fname}')
         except:
@@ -1113,7 +1113,7 @@ class fbCollector(Frame):
         reqdate = datetime.datetime.strptime(self.patt, '%Y%m%d_%H%M%S')
         reqdate = reqdate + datetime.timedelta(seconds=-30)
         getLiveJpgs(reqdate.strftime('%Y%m%d_%H%M%S'), outdir=os.path.join(self.dir_path, 'jpgs'))
-        self.renameImages(self.dir_path)
+        #self.renameImages(self.dir_path)
         self.update_listbox(self.get_bin_list())
 
     def getTrajpickle(self):
