@@ -101,9 +101,9 @@ def loadConfig():
         conda_exe = os.getenv('CONDA_EXE')
         if conda_exe is None: 
             if platform.system() == 'Windows':    # Windows has to be awkward
-                conda_exe = os.expanduser('~/miniconda3/Scripts/conda.exe')
+                conda_exe = os.path.expanduser('~/miniconda3/Scripts/conda.exe')
             else:
-                conda_exe = os.expanduser('~/miniconda3/bin/conda')            
+                conda_exe = os.path.expanduser('~/miniconda3/bin/conda')            
         if conda_exe is None: 
             conda_exe = ''
         localcfg['Fireballs']['conda'] = conda_exe
