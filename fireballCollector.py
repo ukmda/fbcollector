@@ -1,6 +1,6 @@
 #
 # UI to manage fireball data collection
-# Copyright (C) 2018-2023 Mark McIntyre
+# Copyright (C) 2018- Mark McIntyre
 #
 import os
 import sys
@@ -34,6 +34,9 @@ from tkinter.ttk import Label, Style, LabelFrame, Scrollbar
 from PIL import Image as img
 from PIL import ImageTk
 
+from gmnCollector import scpconn
+
+
 appversion = "2026.9.0"
 
 config_file = ''
@@ -42,16 +45,13 @@ global_bg = "Black"
 global_fg = "Gray"
 
 logdir = os.path.join(os.getenv('TMP', default='/tmp'), 'fbcollector')
-
+fblogger = 'fbcollector'
+log = logging.getLogger('fbcollector')
 
 def quitApp():
     # Cleanly exits the app
     root.quit()
     root.destroy()
-
-
-def log_timestamp():
-    return datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
 
 def editTextFile(targfile=None):
@@ -345,6 +345,7 @@ class fbCollector(Frame):
         self.grid(sticky="NSEW")  # Expand frame to all directions
         self.parent = parent
 
+        self.basedir = ''
         self.fb_dir = ''
         self.gmn_key = ''
         self.gmn_user = ''
@@ -391,6 +392,7 @@ class fbCollector(Frame):
         localcfg = loadConfig()
 
         self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
+        self.basedir = self.fb_dir
         os.makedirs(self.fb_dir, exist_ok=True)
 
         self.gmn_key = None
@@ -710,9 +712,22 @@ class fbCollector(Frame):
         return
     
     def solveOrbit(self):
+        if self.wmpl_loc not in sys.path:
+            sys.path.insert(0, self.wmpl_loc)
+        try:
+            from wmpl.Formats.GenericFunctions import addSolverOptions, solveTrajectoryGeneric, MeteorObservation, \
+                prepareObservations, writeMiligInputFileMeteorObservation
+            from wmpl.Utils.TrajConversions import J2000_JD, datetime2JD, altAz2RADec_vect, \
+                equatorialCoordPrecession_vect, jd2Date
+            from wmpl.Formats.ECSV import loadECSVs
+        except Exception:
+            print('wmpl not available')
+            return
+
         log.info('Using ECSV files:')
         ecsv_names = []
         ecsv_loc = os.path.join(self.dir_path,'ecsvs')
+        shutil.rmtree(ecsv_loc, ignore_errors=True)
         os.makedirs(ecsv_loc, exist_ok=True)
         for entry in sorted(os.walk(self.dir_path), key=lambda x: x[0]):
             dir_name, _, file_names = entry
@@ -724,24 +739,18 @@ class fbCollector(Frame):
                 if fn.lower().endswith(".ecsv") and 'REJECT' not in dir_name.upper() and 'REJECT' not in fn.upper():
                     # Add ECSV file, but skip duplicates
                     if fn not in ecsv_names:
-                        ecsv_names.append(fn)
+                        ecsv_names.append(os.path.join(ecsv_loc,fn))
                         log.info(fn)
         if len(ecsv_names) < 2:
             tkMessageBox.showinfo('Warning', 'Need at least two ECSV files')
             return 
-        if platform.system() == 'Windows':    # Windows has to be awkward            
-            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'solve.ps1')
-            shellname = 'powershell.exe'
-        else:
-            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'solve.sh')
-            shellname = 'bash'
-        with open(tmpscr, 'w') as outf:
-            mcruns = 20
-            outf.write(f'cd {self.wmpl_loc}\n')
-            if platform.system() != 'Windows':
-                outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'{self.conda_exe} run -n {self.wmpl_env} python -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
-        _ = subprocess.run([shellname, tmpscr])
+
+        jdt_ref, meteor_list = loadECSVs(ecsv_names)
+
+        mcruns = 5
+        max_toffset=15
+        traj = solveTrajectoryGeneric(jdt_ref, meteor_list, ecsv_loc, mc_runs=mcruns, max_toffset=max_toffset, \
+            plot_all_spatial_residuals=True, show_plots=False, enable_OSM_plot=True)
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
         if len(fldrs) > 0:
@@ -1027,7 +1036,18 @@ class fbCollector(Frame):
                 shutil.rmtree(os.path.join(self.dir_path, ba))
             except Exception:
                 os.remove(os.path.join(self.dir_path, ba))
+        evtdate = self.newpatt.get().strip()
+        bz2file = os.path.join(self.dir_path, f'{camid}_{evtdate}_event.tar.bz2')
+        if os.path.isfile(bz2file):
+            os.remove(bz2file)
         os.remove(os.path.join(self.dir_path, 'stacks', imgname))
+        alreadychecked = [] 
+        checkedfile = os.path.join(self.dir_path,'checked.txt')
+        if os.path.isfile(checkedfile):
+            alreadychecked = [x.strip() for x in open(checkedfile, 'r').readlines()]
+        alreadychecked.append(camid)
+        with open(checkedfile,'w') as outf:
+            outf.write('\n'.join(alreadychecked))
 
     def remove_image(self):
         """ Remove the selected image from disk
@@ -1090,18 +1110,25 @@ class fbCollector(Frame):
     def clean_folder(self):
         stacklist = os.listdir(os.path.join(self.dir_path, 'stacks'))
         camlist = [x[:6] for x in stacklist if 'stack.jpg' in x]
-        datalist = os.listdir(self.dir_path)
-        datalist = [x for x in datalist if 'jpgs' not in x and 'mp4s' not in x and 'stacks' not in x]
+
+        # get a list of camera data folders - they all start with two uppercase letters
+        datalist = [f.path for f in os.scandir(self.dir_path) if f.is_dir()]
+        datalist = [x for x in datalist if os.path.basename(x)[0:2].isupper()]
+
+        # now remove any folders that aren't being kept
         for d in datalist:
-            keep = False
-            for c in camlist:
-                if c in d:
-                    keep = True
-            if keep is False:
-                try:
-                    os.remove(d)
-                except Exception:
-                    pass
+            stationid = os.path.basename(d)
+            if stationid in camlist:
+                continue
+            log.info(f'removing {d}')
+            shutil.rmtree(d, ignore_errors=True)
+            # remove any corresponding bz2 file
+            eventdt = self.newpatt.get().strip()
+            bz2file = os.path.join(self.dir_path, f'{stationid.upper()}_{eventdt}_event.tar.bz2')
+            log.info(f'removing {bz2file}')
+            if os.path.isfile(bz2file):
+                os.remove(bz2file)
+
         return
 
     def getData(self):
@@ -1281,19 +1308,6 @@ class fbCollector(Frame):
         if len(evtdate) < 15:
             tkMessageBox.showinfo("Warning", f'Need seconds in the event date field {evtdate}')
             return
-        fbdir = self.fb_dir
-        if ':' in fbdir:
-            drv = fbdir[0].lower()
-            fbdir = '/mnt/' + drv + fbdir[2:]
-        fbdir = fbdir.replace('\\','/')
-        gmnserver = f'{self.gmn_user}@{self.gmn_server}'
-        gmnkey = self.gmn_key
-        cmd = os.path.join(self.script_loc, 'download_events.sh') + f' {evtdate} {fbdir} 1 {gmnserver} {gmnkey}'
-        if ':' in cmd:
-            drv = cmd[0].lower()
-            cmd = '/mnt/' + drv + cmd[2:]
-        cmd = cmd.replace('\\','/')
-        log.info(f'executing {cmd}')
         if self.evtMonTriggered is None:
             ret = tkMessageBox.askyesno("Warning", 'Event Monitor has not been triggered, continue?')
             if ret is False:
@@ -1303,7 +1317,9 @@ class fbCollector(Frame):
             if ret is False:
                 return
         log.info(f'getting data for {evtdate}')
-        subprocess.run(['bash','-c', cmd])
+        conn = scpconn(self.basedir, self.gmn_server, self.gmn_user, self.gmn_key)
+        conn.getEventsByRegion('UK', evtdate, self.basedir, os.path.join(self.dir_path,'checked.txt'), False)
+        conn.finish()
         tkMessageBox.showinfo("Info", 'Done')
         return 
 
@@ -1423,6 +1439,29 @@ def uploadOrbitGeneric(orbdir, api_key):
         tkMessageBox.showinfo('Info', 'Zip File created')
     
 
+
+def setupLogging(logdir):
+    log.setLevel(logging.INFO)
+
+    os.makedirs(logdir, exist_ok=True)
+    logname = f"{fblogger}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+
+    log_file = os.path.join(logdir, logname)
+    handler = logging.handlers.TimedRotatingFileHandler(log_file, when='D', interval=1)  # Log to a different file each day
+    handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s-%(module)s-line:%(lineno)d - %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s: %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
+    ch.setFormatter(formatter)
+    log.addHandler(ch)
+
+    return 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--datepatt", type=str, help="date pattern to retrieve")
@@ -1441,23 +1480,7 @@ if __name__ == '__main__':
 
     noimg_file = os.path.join(dir_, 'noimage.jpg')
 
-    log = logging.getLogger(__name__)
-    log.setLevel(logging.INFO)
-
-    os.makedirs(logdir, exist_ok=True)
-    log_file = os.path.join(logdir, log_timestamp() + '.log')
-    handler = logging.handlers.TimedRotatingFileHandler(log_file, when='D', interval=1)  # Log to a different file each day
-    handler.setLevel(logging.INFO)
-
-    formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s-%(module)s-line:%(lineno)d - %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s: %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
-    ch.setFormatter(formatter)
-    log.addHandler(ch)
+    setupLogging(logdir)
 
     # Log program start
     log.info("Program start")

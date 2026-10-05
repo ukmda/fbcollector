@@ -18,7 +18,6 @@ PrivilegesRequired=lowest
 Source: ".\dist\fireballCollector.exe"; DestDir: "{app}"
 Source: ".\noimage.jpg"; DestDir: "{app}"
 Source: ".\ukmda.ico"; DestDir: "{app}"
-Source: ".\download_events.sh"; DestDir: "{app}";AfterInstall: DOS2Unux;
 Source: ".\config.ini.sample"; DestDir: "{app}"; Permissions: users-modify
 Source: ".\README.html"; DestDir: "{app}"
 
