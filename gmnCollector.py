@@ -19,6 +19,10 @@ class scpconn():
         self.gmn_user = gmn_user
         self.gmn_key = gmn_key
         self.gmn_port = gmn_port
+        if not os.path.isfile(os.path.expanduser(self.gmn_key)):
+            log.info('keyfile not available, unable to connect to GMN')
+            self.initialised = False
+            return 
         k = paramiko.RSAKey.from_private_key_file(os.path.expanduser(self.gmn_key))
         self.sshcli = paramiko.SSHClient()
         server=self.gmn_server
@@ -29,8 +33,11 @@ class scpconn():
         self.scpcli = SCPClient(self.sshcli.get_transport())
         self.sftpcli = self.sshcli.open_sftp()
         log.info('gmn connection opened')
+        self.initialised = True
 
     def __del__(self):
+        if not self.initialised:
+            return
         self.sftpcli.close()
         self.scpcli.close()
         self.sshcli.close()

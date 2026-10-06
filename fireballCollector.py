@@ -1319,6 +1319,9 @@ class fbCollector(Frame):
                 return
         log.info(f'getting data for {evtdate}')
         conn = scpconn(self.basedir, self.gmn_server, self.gmn_user, self.gmn_key)
+        if not conn.initialised:
+            log.info('unable to connect to GMN')
+            return 
         conn.getEventsByRegion('UK', evtdate, self.basedir, os.path.join(self.dir_path,'checked.txt'), False)
         conn.finish()
         tkMessageBox.showinfo("Info", 'Done')
