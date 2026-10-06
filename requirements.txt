@@ -10,3 +10,18 @@ pandas
 markdown2
 pytest
 pytest-cov
+matplotlib
+numpy < 2.0
+cython
+scipy
+matplotlib
+jplephem
+pyephem
+basemap
+PyQt5 ; platform_machine != 'aarch64'
+pyyaml
+pyswarms
+pkgconfig
+ml-dtypes
+keras
+pytz
