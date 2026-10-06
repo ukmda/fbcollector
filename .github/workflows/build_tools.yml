@@ -36,6 +36,7 @@ jobs:
           echo "running build step"
           pip install -r requirements.txt
           pip install pyinstaller
+          python -V
           pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
           markdown2 ./README.md > README.html
       - name: packaging

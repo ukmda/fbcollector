@@ -1488,6 +1488,8 @@ if __name__ == '__main__':
 
     # Log program start
     log.info("Program start")
+    log.info(sys.version)
+    log.info(f'app version {appversion}')
     log.info(f'config file is {config_file}')
 
 
