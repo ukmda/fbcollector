@@ -720,8 +720,9 @@ class fbCollector(Frame):
             from wmpl.Utils.TrajConversions import J2000_JD, datetime2JD, altAz2RADec_vect, \
                 equatorialCoordPrecession_vect, jd2Date
             from wmpl.Formats.ECSV import loadECSVs
-        except Exception:
-            print('wmpl not available')
+        except Exception as e:
+            log.warning('wmpl not available')
+            log.warning(e)
             return
 
         log.info('Using ECSV files:')
