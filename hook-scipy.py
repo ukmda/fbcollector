@@ -59,5 +59,5 @@ if check_requirement("numpy >= 2.0.0"):
     hiddenimports += collect_submodules('numpy.f2py', filter=lambda name: name != 'numpy.f2py.tests')
 
 # add scipy.misc - my tweak
-hiddenimports += ['scipy.misc.*']
+hiddenimports.append('scipy.misc')
 
