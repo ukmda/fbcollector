@@ -21,8 +21,8 @@ jobs:
       - name: testing
         run: |
           pip install -r requirements.txt
-          set PYTHONPATH="%PYTHONPATH%;."
-          echo %PYTHONPATH%
+          $ENV:PYTHONPATH="$ENV:PYTHONPATH;."
+          echo $ENV:PYTHONPATH
           pytest -v ./tests --cov=. --cov-report=term-missing
   build_fbtool:
     name: build fbcollector
