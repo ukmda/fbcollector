@@ -5,19 +5,37 @@ This tool allows authorised users to collect fireball data from UKMON and GMN an
 
 ## Prerequisites
   
-* Miniconda or anaconda, required to create python virtual environments for RMS and WMPL. 
-* [RMS](https://github.com/CroatianMeteorNetwork/RMS) installed with its own Conda virtual environment. This is used to reduce raw data.
-* [WMPL](https://github.com/wmpg/WesternMeteorPyLib/) installed with its own Conda virtual environment. This is used to solve trajectories.
-* A local folder where you will store fireball data. This is called `basedir` in this documentation. 
+* Miniconda or Anaconda is required to create python virtual environments for this app, RMS and WMPL. You can get Miniconda for Windows from [here](https://www.anaconda.com/docs/getting-started/miniconda/install/windows-cli-install#powershell), and installers for MacOS and Linux are available from the same site. On Linux or MacOS, select "Yes" when asked if you want to integrate Conda into your shell.
 
-The following are optional: 
+* You will need a local folder where you will store fireball data. This is called the `basedir` in this documentation. 
+  
+* To to reduce raw data, you will need to install [RMS](https://github.com/CroatianMeteorNetwork/RMS). 
+* To solve trajectories, you will need to install [WMPL](https://github.com/wmpg/WesternMeteorPyLib/). 
+
+The following are optional:
 * GMN Coordinator's ssh key. See "Collecting Data from GMN" below. 
-* WSL2 activated with rsync installed. Required to collect data from GMN. 
 * UKMON API Key. See "Sending Solutions to UKMON" below
 
 ## Installation
-* First install WMPL and RMS in their own Conda environments and verify they're working. 
-* Then install this package `setup_fireballCollector.exe` from [here](https://github.com/ukmda/fbcollector/releases).
+* Open an Anaconda Powershell Prompt or Linux Terminal window. 
+
+* Create and activate a conda environment to run the application in:
+  ``` bash
+  conda create -n fbcollector python=3.12
+  conda activate fbcollector
+  ```
+
+In the same window, create a folder for the application and change directory into it:
+``` bash
+mkdir -p ~/src/fbcollector
+cd ~/src/fbcollector
+```
+* Now download the app package [setup_fbcollector.]() and save it into this folder.
+ 
+
+Now download the package [setup_fbcollector.zip]() and unpack the contents into the folder you just created eg `~/src/fbcollector`.
+
+run the install script (`install.ps1` for Windows or `install.sh` for Linux/MacOS). 
 
 ### Linux Support
 The app should also work on Linux. You will need to create a conda or python virtualenv named `fbcollector`, activate it and then clone this repo and install the requirements via `pip install -r requirements.txt`. You should then be able to run the programme by typing `python fireballCollector.py`
