@@ -25,3 +25,5 @@ pkgconfig
 ml-dtypes
 keras
 pytz
+pytest
+pytest-cov

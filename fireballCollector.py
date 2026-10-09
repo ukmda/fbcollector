@@ -582,8 +582,8 @@ class fbCollector(Frame):
         save_bmp = StyledButton(self.save_panel, text="Get Images", width = 8, command = lambda: self.getData())
         save_bmp.grid(row = 1, column = 3)
 
-        save_bmp = StyledButton(self.save_panel, text="Remove", width = 8, command = lambda: self.remove_image())
-        save_bmp.grid(row = 1, column = 4)
+        self.statusbox = Label(self, text = "Ready", font=("Courier", 12))
+        self.statusbox.grid(row = 1, column = 5)
         
         # Listbox
         self.scrollbar = Scrollbar(self)
@@ -723,11 +723,13 @@ class fbCollector(Frame):
         except Exception as e:
             log.warning('wmpl not available')
             log.warning(e)
+            self.statusbox.configure(text = "WMPL unavailable, can't run solver")
             return
 
         log.info('Using ECSV files:')
         ecsv_names = []
         ecsv_loc = os.path.join(self.dir_path,'ecsvs')
+        saved_dir_path = self.dir_path
         shutil.rmtree(ecsv_loc, ignore_errors=True)
         os.makedirs(ecsv_loc, exist_ok=True)
         for entry in sorted(os.walk(self.dir_path), key=lambda x: x[0]):
@@ -744,10 +746,13 @@ class fbCollector(Frame):
                         log.info(fn)
         if len(ecsv_names) < 2:
             tkMessageBox.showinfo('Warning', 'Need at least two ECSV files')
+            self.statusbox.configure(text = f"Need at least two ECSVs, got {len(ecsv_names)}")
             return 
 
         jdt_ref, meteor_list = loadECSVs(ecsv_names)
 
+        self.statusbox.configure(text = "Solving, please wait....")
+        self.config(cursor="watch")
         mcruns = 5
         max_toffset=15
         traj = solveTrajectoryGeneric(jdt_ref, meteor_list, ecsv_loc, mc_runs=mcruns, max_toffset=max_toffset, \
@@ -761,7 +766,13 @@ class fbCollector(Frame):
                 shutil.rmtree(self.soln_outputdir)
             log.info(f'moving {os.path.join(ecsv_loc, fldrs[0])} to {self.dir_path}')
             shutil.move(os.path.join(ecsv_loc, fldrs[0]), self.dir_path)
-        tkMessageBox.showinfo('Info', 'Solver Finished')
+            self.statusbox.configure(text = "Viewing Solution")
+            self.config(cursor="")
+            self.viewSolution()
+        else:
+            self.statusbox.configure(text = "Solver FAILED")
+            self.config(cursor="")
+            self.viewData()
         return 
     
     def createGraphs(self):
@@ -858,6 +869,7 @@ class fbCollector(Frame):
         return 
     
     def viewData(self):
+        self.statusbox.configure(text = "Viewing Images")
         self.review_stack = False
         self.soln_outputdir = None
         bin_list = self.get_bin_list()
@@ -940,6 +952,7 @@ class fbCollector(Frame):
                 self.listbox.itemconfig(END, fg = 'green')
 
     def checkStacks(self):
+        self.statusbox.configure(text = "Viewing Stacks")
         self.review_stack = True
         bin_list = self.get_bin_list()
         if len(bin_list) > 0:
@@ -1142,6 +1155,7 @@ class fbCollector(Frame):
         reqdate = reqdate + datetime.timedelta(seconds=-30)
         getLiveJpgs(reqdate.strftime('%Y%m%d_%H%M%S'), outdir=os.path.join(self.dir_path, 'jpgs'))
         #self.renameImages(self.dir_path)
+        self.statusbox.configure(text = "Viewing Images")
         self.update_listbox(self.get_bin_list())
 
     def getTrajpickle(self):
