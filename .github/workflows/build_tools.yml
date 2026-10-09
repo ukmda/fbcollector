@@ -31,23 +31,31 @@ jobs:
     steps:
       - name: "checkout repository"
         uses: actions/checkout@v4
-      - name: building
+      - name: make help
         run: |
-          echo "running build step"
-          pip install -r requirements.txt
-          pip install pyinstaller
-          pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico --additional-hooks-dir=. 
-          markdown2 ./README.md > README.html
-      - name: packaging
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+          markdown2 ./USAGE.md > USAGE.html
+      - name: package
+        uses: thedoctor0/zip-release@0.7.5
         with:
-          path: .\fireballcollector_setup.iss
+          type: 'zip'
+          filename: 'fireball_collector.zip'
+          exclusions: '/*.git* /__pycache__/* /.vscode* *.md *.yaml *.spec *.iss *.toml tests/* /.pytest*'
+      #  run: |
+      #    echo "running build step"
+      #    pip install -r requirements.txt
+      #    pip install pyinstaller
+      #    pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico --additional-hooks-dir=. 
+      #    
+      #- name: packaging
+      #  uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+      #  with:
+      #    path: .\fireballcollector_setup.iss
       - name: release
         uses: xresloader/upload-to-github-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.UKMDA_MM_PAT }}
         with:
-          file: .\setup_fireballCollector.exe
+          file: .\fireball_collector.zip
           tags: true
           #draft: true
           overwrite: true
