@@ -39,6 +39,7 @@ from gmnCollector import scpconn
 
 appversion = "2026.9.0"
 
+dir_  = ''
 config_file = ''
 noimg_file = ''
 global_bg = "Black"
@@ -95,6 +96,7 @@ def getSummaryText(txtfile):
 
 
 def loadConfig():
+
     localcfg = configparser.ConfigParser()
     localcfg.read(config_file)
     if 'conda' not in localcfg['Fireballs']:
@@ -388,6 +390,10 @@ class fbCollector(Frame):
         return 
 
     def readConfig(self):
+        if not os.path.isfile(config_file):
+            shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
+            tkMessageBox.showinfo("Config Missing", 'Please configure before using')
+            self.reviewConfig()
 
         localcfg = loadConfig()
 
@@ -1492,9 +1498,6 @@ if __name__ == '__main__':
     else:
         dir_ = os.getcwd()
         config_file = os.path.join(dir_, 'config.ini')
-    if not os.path.isfile(config_file):
-        shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
-        tkMessageBox.showinfo("Config Missing", 'Please configure before using')
 
     noimg_file = os.path.join(dir_, 'noimage.jpg')
 
