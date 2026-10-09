@@ -7,69 +7,50 @@ name: Build Fireball Analyser
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: [main]
+    branches: [master]
 jobs:
   local_tests:
     name: local test stage
-    runs-on: win10
+    runs-on: windows-latest
     steps:
       - name: "checkout repository"
         uses: actions/checkout@v4
       - name: testing
         run: |
-          echo "hello from test"
-          conda activate fbcollector
-          dir
+          pip install -r requirements.txt
+          $ENV:PYTHONPATH="$ENV:PYTHONPATH;."
+          echo $ENV:PYTHONPATH
+          pytest -v ./tests --cov=. --cov-report=term-missing
   build_fbtool:
     name: build fbcollector
-    runs-on: win10
+    runs-on: windows-latest
     needs: local_tests
     steps:
+      - name: "checkout repository"
+        uses: actions/checkout@v4
       - name: building
         run: |
           echo "running build step"
-          conda activate fbcollector
-          cd fbCollector
-          pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico --additional-hooks-dir=. 
           markdown2 ./README.md > README.html
-  package_fbtool:
-    name: package fbcollector
-    runs-on: win10
-    needs:
-      - build_fbtool
-    steps:
       - name: packaging
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
-          path: .\fbCollector\fireballcollector_setup.iss
-  release_fbtool:
-    name: release fbcollector
-    runs-on: win10
-    needs:
-      - package_fbtool
-    steps:
+          path: .\fireballcollector_setup.iss
       - name: release
         uses: xresloader/upload-to-github-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.MM_PAT }}
+          GITHUB_TOKEN: ${{ secrets.UKMDA_MM_PAT }}
         with:
-          file: e:\temp\setup_fireballCollector.exe
+          file: .\setup_fireballCollector.exe
           tags: true
-          draft: true
+          #draft: true
           overwrite: true
-          tag_name: 2025.11.1
-          default_release_name: Tools to Gather Fireball data and Manage UKMON Cameras
-          default_release_body_path: fbCollector\README.md
-  cleanup_fbtool:
-    name: clean up temp fbcollector files
-    runs-on: win10
-    continue-on-error: true
-    needs:
-      - release_fbtool
-    steps:
-      - name: delete package
-        run: |
-          del e:\temp\setup_fireballCollector.exe
+          tag_name: 2026.9.0
+          # default_release_name: Tool to Gather Fireball data 
+          default_release_body_path: ./release_notes.txt

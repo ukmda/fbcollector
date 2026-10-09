@@ -1,6 +1,6 @@
 #
 # UI to manage fireball data collection
-# Copyright (C) 2018-2023 Mark McIntyre
+# Copyright (C) 2018- Mark McIntyre
 #
 import os
 import sys
@@ -26,6 +26,7 @@ from scp import SCPClient
 import tkinter as tk
 import tkinter.filedialog as tkFileDialog
 import tkinter.messagebox as tkMessageBox
+from tkinter.simpledialog import Dialog
 from tkinter.simpledialog import askstring
 from tkinter import StringVar, Frame, ACTIVE, END, Listbox, Menu, Entry, Button
 from tkinter.ttk import Label, Style, LabelFrame, Scrollbar
@@ -33,12 +34,19 @@ from tkinter.ttk import Label, Style, LabelFrame, Scrollbar
 from PIL import Image as img
 from PIL import ImageTk
 
+from gmnCollector import scpconn
+
+
+appversion = "2026.9.0"
 
 config_file = ''
 noimg_file = ''
 global_bg = "Black"
 global_fg = "Gray"
 
+logdir = os.path.join(os.getenv('TMP', default='/tmp'), 'fbcollector')
+fblogger = 'fbcollector'
+log = logging.getLogger('fbcollector')
 
 def quitApp():
     # Cleanly exits the app
@@ -46,20 +54,66 @@ def quitApp():
     root.destroy()
 
 
-def log_timestamp():
-    """ Returns timestamp for logging.
-    """
-    return datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+def editTextFile(targfile=None):
+    if targfile is None:
+        targfile = config_file
+    opencmd = 'open'
+    if platform.system() == 'Windows':    # Windows has to be awkward
+        opencmd = 'notepad.exe'
+    subprocess.run([opencmd, targfile])
+    return
 
 
-def showConfig():
-    if platform.system() == 'Darwin':       # macOS
-        procid = subprocess.Popen(('open', config_file))
-    elif platform.system() == 'Windows':    # Windows
-        procid = subprocess.Popen(('cmd','/c',config_file))
-    else:                                   # linux variants
-        procid = subprocess.Popen(('xdg-open', config_file))
-    procid.wait()
+def getSummaryText(txtfile):
+    res = []
+    lis = open(txtfile,'r').readlines()
+    for i in range(0, len(lis)):
+        currli = lis[i].strip()
+        if 'Timing offsets ' in currli:
+            while currli != '':
+                res.append(currli.split('+/-')[0])
+                i =i+1
+                currli = lis[i].strip()
+            res.append('')
+        if 'Orbit:' in currli:
+            while currli != '':
+                if 'Pi' in currli:
+                    i = i+6 # skip some orbital parameters
+                else:
+                    res.append(currli.split('+/-')[0])
+                i =i+1
+                currli = lis[i].strip()
+            res.append('')
+        if 'point on the trajectory:' in currli:
+            while currli != '':
+                if 'MSL' not in currli and currli.split('+/-')[0].strip() !='':
+                    res.append(currli.split('+/-')[0])
+                i =i+1
+                currli = lis[i].strip()
+            res.append('')
+    return '\n'.join(res)
+
+
+def loadConfig():
+    localcfg = configparser.ConfigParser()
+    localcfg.read(config_file)
+    if 'conda' not in localcfg['Fireballs']:
+        conda_exe = os.getenv('CONDA_EXE')
+        if conda_exe is None: 
+            if platform.system() == 'Windows':    # Windows has to be awkward
+                conda_exe = os.path.expanduser('~/miniconda3/Scripts/conda.exe')
+            else:
+                conda_exe = os.path.expanduser('~/miniconda3/bin/conda')            
+        if conda_exe is None: 
+            conda_exe = ''
+        localcfg['Fireballs']['conda'] = conda_exe
+    return localcfg
+
+
+def saveConfig(cfgdata):
+    with open(config_file,'w') as outf:
+        cfgdata.write(outf)
+    return 
 
 
 class StyledButton(Button):
@@ -80,81 +134,166 @@ class StyledEntry(Entry):
         self.configure(foreground = global_fg, background = global_bg, insertbackground = global_fg, disabledbackground = global_bg, disabledforeground = "DimGray")
 
 
-class ConstrainedEntry(StyledEntry):
-    """ Entry box with constrained values which can be input (e.g. 0-255).
-    """
-    def __init__(self, *args, **kwargs):
-        StyledEntry.__init__(self, *args, **kwargs)
-        self.maxvalue = 255
-        vcmd = (self.register(self.on_validate), "%P")
-        self.configure(validate="key", validatecommand=vcmd)
-        # self.configure(foreground = global_fg, background = global_bg, insertbackground = global_fg)
+class cfgDialog(Dialog):
+    def __init__(self, parent):
+        self.parent = parent
+        self.cfgdata = loadConfig()
+        super().__init__(parent,'Configuration')    
 
-    def disallow(self):
-        """ Pings a bell on values which are out of bound.
-        """
-        self.bell()
+    def body(self, frame):
+        # base folder
+        self.basedir_label = tk.Label(frame, width=25, text="Base Dir", anchor='w')
+        self.basedir_box = tk.Entry(frame, width=50)
+        self.basedir_box.insert(tk.END, self.cfgdata['Fireballs']['basedir'])
 
-    def update_value(self, maxvalue):
-        """ Updates values in the entry box.
-        """
-        self.maxvalue = maxvalue
-        vcmd = (self.register(self.on_validate), "%P")
-        self.configure(validate="key", validatecommand=vcmd)
+        # RMS settings
+        self.rms_label = tk.Label(frame, width=25, text="RMS Settings", anchor='w')
+        self.rmsloc_label = tk.Label(frame, width=25, text="Location", anchor='w')
+        self.rmsloc_box = tk.Entry(frame, width=50)
+        self.rmsloc_box.insert(tk.END, self.cfgdata['reduction']['rms_loc'])
+        self.rmsenv_label = tk.Label(frame, width=25, text="Python Env Name", anchor='w')
+        self.rmsenv_box = tk.Entry(frame, width=50)
+        self.rmsenv_box.insert(tk.END, self.cfgdata['reduction']['rms_env'])
 
-    def on_validate(self, new_value):
-        """ Checks if entered value is within bounds.
-        """
-        try:
-            if new_value.strip() == "":
-                return True
-            value = int(new_value)
-            if value < 0 or value > self.maxvalue:
-                self.disallow()
-                return False
-        except ValueError:
-            self.disallow()
-            return False
+        # WMPL settings
+        self.wmpl_label = tk.Label(frame, width=25, text="WMPL Settings", anchor='w')
+        self.wmplloc_label = tk.Label(frame, width=25, text="Location", anchor='w')
+        self.wmplloc_box = tk.Entry(frame, width=50)
+        self.wmplloc_box.insert(tk.END, self.cfgdata['solver']['wmpl_loc'])
+        self.wmplenv_label = tk.Label(frame, width=25, text="Python Env Name", anchor='w')
+        self.wmplenv_box = tk.Entry(frame, width=50)
+        self.wmplenv_box.insert(tk.END, self.cfgdata['solver']['wmpl_env'])
 
-        return True
+        # sharing
+        self.share_label = tk.Label(frame, width=25, text="Optional Sharing", anchor='w')
+        self.shareloc_label = tk.Label(frame, width=25, text="Location", anchor='w')
+        self.shareloc_box = tk.Entry(frame, width=50)
+        self.shareloc_box.insert(tk.END, self.cfgdata['sharing']['shrfldr'])
+
+        # GMN config
+        self.gmn_label = tk.Label(frame, width=25, text="Optional GMN Config", anchor='w')
+        self.gmnkey_label = tk.Label(frame, width=25, text="Key", anchor='w')
+        self.gmnkey_box = tk.Entry(frame, width=50)
+        self.gmnkey_box.insert(tk.END, self.cfgdata['gmn']['gmnkey'])
+        self.gmnserver_label = tk.Label(frame, width=25, text="Server", anchor='w')
+        self.gmnserver_box = tk.Entry(frame, width=50)
+        self.gmnserver_box.insert(tk.END, self.cfgdata['gmn']['gmnserver'])
+        self.gmnuser_label = tk.Label(frame, width=25, text="User", anchor='w')
+        self.gmnuser_box = tk.Entry(frame, width=50)
+        self.gmnuser_box.insert(tk.END, self.cfgdata['gmn']['gmnuser'])
+
+        # ukmon
+        self.ukmon_label = tk.Label(frame, width=25, text="Optional UKMON Config", anchor='w')
+        self.ukmonapikey_label = tk.Label(frame, width=25, text="API Key", anchor='w')
+        self.ukmonapikey_box = tk.Entry(frame, width=50)
+        self.ukmonapikey_box.insert(tk.END, self.cfgdata['ukmon']['apikey'])
+
+        # conda location
+        self.conda_label = tk.Label(frame, width=25, text="Conda Location", anchor='w')
+        self.conda_box = tk.Entry(frame, width=50)
+        self.conda_box.insert(tk.END, self.cfgdata['Fireballs']['conda'])
+
+        # now put into grid
+        self.basedir_label.grid(column=0, row=0)
+        self.basedir_box.grid(column=1, row=0)
+        self.rms_label.grid(column=0, row=1)
+        self.rmsenv_label.grid(column=0, row=2)
+        self.rmsenv_box.grid(column=1, row=2)
+        self.rmsloc_label.grid(column=0, row=3)
+        self.rmsloc_box.grid(column=1, row=3)
+
+        self.wmpl_label.grid(column=0, row=4)
+        self.wmplenv_label.grid(column=0, row=5)
+        self.wmplenv_box.grid(column=1, row=5)
+        self.wmplloc_label.grid(column=0, row=6)
+        self.wmplloc_box.grid(column=1, row=6)
+
+        self.share_label.grid(column=0, row=7)
+        self.shareloc_label.grid(column=0, row=8)
+        self.shareloc_box.grid(column=1, row=8)
+
+        self.gmn_label.grid(column=0, row=9)
+        self.gmnkey_label.grid(column=0, row=10)
+        self.gmnkey_box.grid(column=1, row=10)
+        self.gmnserver_label.grid(column=0, row=11)
+        self.gmnserver_box.grid(column=1, row=11)
+        self.gmnuser_label.grid(column=0, row=12)
+        self.gmnuser_box.grid(column=1, row=12)
+
+        self.ukmon_label.grid(column=0, row=13)
+        self.ukmonapikey_label.grid(column=0, row=14)
+        self.ukmonapikey_box.grid(column=1, row=14)
+
+        self.conda_label.grid(column=0, row=16)
+        self.conda_box.grid(column=1, row=16)
+
+        return
+
+    def ok_pressed(self):
+        self.cfgdata['Fireballs']['basedir'] = self.basedir_box.get().strip()
+        self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
+        self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
+        self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
+        self.cfgdata['solver']['wmpl_env'] = self.wmplenv_box.get().strip()
+        self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
+        self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
+        self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
+        self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
+        self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
+        self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
+        saveConfig(self.cfgdata)
+        self.destroy()
+
+    def cancel_pressed(self):
+        self.destroy()
+
+    def buttonbox(self):
+        self.ok_button = tk.Button(self, text='OK', width=5, command=self.ok_pressed)
+        self.ok_button.pack(side="left")
+        cancel_button = tk.Button(self, text='Cancel', width=5, command=self.cancel_pressed)
+        cancel_button.pack(side="right")
+        self.bind("<Return>", lambda event: self.ok_pressed())
+        self.bind("<Escape>", lambda event: self.cancel_pressed())
 
 
-def getECSVs(stationID, dateStr, savefiles=False, outdir='.'):
+def getECSVs(stationID, dateStr, outdir='.'):
     """
     Retrieve a detection in ECSV format for the specified date  
     """
     apiurl='https://api.ukmeteors.co.uk/getecsv?stat={}&dt={}'
     res = requests.get(apiurl.format(stationID, dateStr))
     ecsvlines=''
+    log.info(f'retrieving ECSV for {stationID} at {dateStr}')
     if res.status_code == 200:
         rawdata=res.text.strip()
         if len(rawdata) > 10:
             ecsvlines=rawdata.split('\n') # convert the raw data into a python list
-            if savefiles is True:
-                os.makedirs(outdir, exist_ok=True)
-                fnamebase = dateStr.replace(':','_').replace('.','_') # create an output filename
-                j=0
-                outf = False
-                for li in ecsvlines:
-                    if 'issue getting data' in li:
-                        print(li)
-                        return li
-                    if '# %ECSV' in li:
-                        if outf is not False:
-                            outf.close()
-                        j=j+1
-                        fname = fnamebase + f'_ukmda_{stationID}_M{j:03d}.ecsv'
-                        outf = open(os.path.join(outdir, fname), 'w')
-                        print('saving to ', os.path.join(outdir,fname))
-                    if outf:
-                        outf.write(f'{li}\n')
-                    else:
-                        print('no ECSV marker found in data')
+            os.makedirs(outdir, exist_ok=True)
+            fnamebase = dateStr.replace(':','_').replace('.','_') # create an output filename
+            j=0
+            outf = False
+            retval = False
+            for li in ecsvlines:
+                if 'issue getting data' in li:
+                    log.info(f'unable to retrieve ECSV for {stationID} at {dateStr}')
+                    return False
+                if '# %ECSV' in li:
+                    retval = True
+                    if outf is not False:
+                        outf.close()
+                    j=j+1
+                    fname = fnamebase + f'_ukmda_{stationID}_M{j:03d}.ecsv'
+                    outf = open(os.path.join(outdir, fname), 'w')
+                    log.info(f'saving to {os.path.join(outdir,fname)}')
+                if outf:
+                    outf.write(f'{li}\n')
+            return retval
         else:
-            print('no error, but no data returned')
+            log.info('no error, but no data returned')
+            return False
     else:
-        print(res.status_code)
-    return ecsvlines
+        log.info(f'unable to get data: html error {res.status_code}')
+        return False
 
 
 def _download(url, outdir, fname=None):
@@ -184,11 +323,11 @@ def getLiveJpgs(dtstr, outdir=None):
     fromdstr = isodt1.isoformat()[:19]+'.000Z'
     isodt2 = isodt1 + datetime.timedelta(minutes=1)
     todstr = isodt2.isoformat()[:19]+'.000Z'
-    liveimgs = pd.read_json(f'{apiurl}?dtstr={fromdstr}&enddtstr={todstr}&fmt=withxml')
+    liveimgs = pd.read_json(f'{apiurl}?dtstr={fromdstr}&enddtstr={todstr}&fmt=json')
 
     for _, thisimg in liveimgs.iterrows():
         try:
-            jpgurl = thisimg .urls['url']
+            jpgurl = thisimg.urls['url']
             fname = _download(jpgurl, outdir)
             log.info(f'retrieved {fname}')
         except:
@@ -206,6 +345,7 @@ class fbCollector(Frame):
         self.grid(sticky="NSEW")  # Expand frame to all directions
         self.parent = parent
 
+        self.basedir = ''
         self.fb_dir = ''
         self.gmn_key = ''
         self.gmn_user = ''
@@ -222,6 +362,7 @@ class fbCollector(Frame):
         self.soln_outputdir = None
         self.log_files_to_keep = 30
         self.script_loc = os.path.split(config_file)[0]
+        self.conda_exe = ''
 
         self.readConfig()
 
@@ -247,9 +388,11 @@ class fbCollector(Frame):
         return 
 
     def readConfig(self):
-        localcfg = configparser.ConfigParser()
-        localcfg.read(config_file)
+
+        localcfg = loadConfig()
+
         self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
+        self.basedir = self.fb_dir
         os.makedirs(self.fb_dir, exist_ok=True)
 
         self.gmn_key = None
@@ -275,21 +418,22 @@ class fbCollector(Frame):
         if localcfg.has_option('solver','wmpl_loc'):
             self.wmpl_loc = os.path.expanduser(localcfg['solver']['wmpl_loc'].replace('$HOME','~')).replace('\\','/')
             self.wmpl_env= localcfg['solver']['wmpl_env']
-        log.info(f'wmpl_loc {self.wmpl_loc}')
 
         self.rms_loc = None
         if localcfg.has_option('reduction','rms_loc'):
             self.rms_loc = os.path.expanduser(localcfg['reduction']['rms_loc'].replace('$HOME','~')).replace('\\','/')
             self.rms_env = localcfg['reduction']['rms_env']
 
-
         self.share_loc = None
         if localcfg.has_option('sharing','shrfldr'):
             self.share_loc = os.path.expanduser(localcfg['sharing']['shrfldr'].replace('$HOME','~')).replace('\\','/')
 
+        self.conda_exe = localcfg['Fireballs']['conda']
+        log.info(f'conda is {self.conda_exe}')
+        return 
+
     def quitApplication(self):
-        print('quitting')
-        logdir = os.path.join(os.getenv('TMP'), 'fbcollector')
+        log.info('quitting')
         logfiles = os.listdir(logdir)
         numtokeep = self.log_files_to_keep
         if len(logfiles) > numtokeep:
@@ -438,8 +582,8 @@ class fbCollector(Frame):
         save_bmp = StyledButton(self.save_panel, text="Get Images", width = 8, command = lambda: self.getData())
         save_bmp.grid(row = 1, column = 3)
 
-        save_bmp = StyledButton(self.save_panel, text="Remove", width = 8, command = lambda: self.remove_image())
-        save_bmp.grid(row = 1, column = 4)
+        self.statusbox = Label(self, text = "Ready", font=("Courier", 12))
+        self.statusbox.grid(row = 1, column = 5)
         
         # Listbox
         self.scrollbar = Scrollbar(self)
@@ -463,16 +607,18 @@ class fbCollector(Frame):
         except:
             noimage = None
 
-        self.imagelabel = Label(self, image = noimage)
+        self.imagelabel = Label(self, image = noimage, textvariable='')
         self.imagelabel.image = noimage
         self.imagelabel.grid(row=3, column=3, rowspan = 4, columnspan = 3)
 
         # Timestamp label
         self.timestamp_label = Label(self, text = "CCNNNN YYYY-MM-DD HH:MM.SS.mms", font=("Courier", 12))
         self.timestamp_label.grid(row = 7, column = 3, sticky = "E")
+        log.info('initUI completed')
 
     def reviewConfig(self):
-        showConfig()
+        _ = cfgDialog(self)
+        log.info('done editing config')
         self.readConfig()
         self.initUI()
 
@@ -485,25 +631,46 @@ class fbCollector(Frame):
         if current_image == '':
             return 
         camid = current_image[3:9]
-        print('selected camera is', camid)
+        log.info(f'selected camera is {camid}')
         dirname = os.path.join(self.dir_path, camid)
-        tmpscr = os.path.join(os.getenv('TEMP'), 'reduce.ps1')
+        if not os.path.isfile(os.path.join(dirname, '.config')):
+            tkMessageBox.showinfo("Warning", "No camera .config file, can't proceed")
+            return             
+        fflist = glob.glob(os.path.join(dirname,'FF*.fits'))
+        frlist = glob.glob(os.path.join(dirname,'FR*.bin'))
+        log.info(f'Found {len(fflist)} FFs and {len(frlist)} FRs')
+        if len(fflist) == 0 and len(frlist) == 0:
+            tkMessageBox.showinfo("Warning", "No FF or FR files to reduce")
+            return 
+        if platform.system() == 'Windows':    # Windows has to be awkward
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.ps1')
+            shellname = 'powershell.exe'
+        else:
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
+            shellname = 'bash'
         with open(tmpscr, 'w') as outf:
-            outf.write(f'cd {self.rms_loc}\nconda activate {self.rms_env}\npython -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
-        _ = subprocess.run(['powershell.exe', tmpscr])
+            outf.write(f'cd {self.rms_loc}\n')
+            if platform.system() != 'Windows':    # Windows has to be awkward
+                outf.write('eval "$(conda shell.bash hook)"\n')
+            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+
+        _ = subprocess.run([shellname, tmpscr])
         frs = glob.glob(os.path.join(dirname, 'FR*.bin'))
         if len(frs) > 0:
             if tkMessageBox.askyesno("Rerun", f'{len(frs)} FR files detected - rerun?'):
                 for fr in frs:
                     with open(tmpscr, 'w') as outf:
-                        outf.write(f'cd {self.rms_loc}\nconda activate {self.rms_env}\npython -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
-                    _ = subprocess.run(['powershell.exe', tmpscr])
+                        outf.write(f'cd {self.rms_loc}\n')
+                        if platform.system() != 'Windows':    # Windows has to be awkward
+                            outf.write('eval "$(conda shell.bash hook)"\n')
+                        outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                    _ = subprocess.run([shellname, tmpscr])
         try:
             os.remove(tmpscr)
         except:
             pass
         os.makedirs(os.path.join(self.dir_path,'ecsvs'), exist_ok=True)
-        ecsvfs = glob.glob1(dirname, '*.ecsv')
+        ecsvfs = glob.glob('*.ecsv', root_dir=dirname)
         for ecsv in ecsvfs:
             shutil.copyfile(os.path.join(dirname, ecsv), os.path.join(self.dir_path, 'ecsvs', ecsv))
 
@@ -539,16 +706,31 @@ class fbCollector(Frame):
             log.info('urk')
             return 
         bin_list = [line for line in os.listdir(os.path.join(self.dir_path, 'jpgs')) if self.correct_datafile_name(line)]
-        #print(bin_list)
         for b in bin_list:
             self.selected[b] = (0, '')
         self.update_listbox(bin_list)
         return
     
     def solveOrbit(self):
+        if self.wmpl_loc not in sys.path:
+            sys.path.insert(0, self.wmpl_loc)
+        try:
+            from wmpl.Formats.GenericFunctions import addSolverOptions, solveTrajectoryGeneric, MeteorObservation, \
+                prepareObservations, writeMiligInputFileMeteorObservation
+            from wmpl.Utils.TrajConversions import J2000_JD, datetime2JD, altAz2RADec_vect, \
+                equatorialCoordPrecession_vect, jd2Date
+            from wmpl.Formats.ECSV import loadECSVs
+        except Exception as e:
+            log.warning('wmpl not available')
+            log.warning(e)
+            self.statusbox.configure(text = "WMPL unavailable, can't run solver")
+            return
+
         log.info('Using ECSV files:')
         ecsv_names = []
         ecsv_loc = os.path.join(self.dir_path,'ecsvs')
+        saved_dir_path = self.dir_path
+        shutil.rmtree(ecsv_loc, ignore_errors=True)
         os.makedirs(ecsv_loc, exist_ok=True)
         for entry in sorted(os.walk(self.dir_path), key=lambda x: x[0]):
             dir_name, _, file_names = entry
@@ -560,19 +742,22 @@ class fbCollector(Frame):
                 if fn.lower().endswith(".ecsv") and 'REJECT' not in dir_name.upper() and 'REJECT' not in fn.upper():
                     # Add ECSV file, but skip duplicates
                     if fn not in ecsv_names:
-                        ecsv_names.append(fn)
+                        ecsv_names.append(os.path.join(ecsv_loc,fn))
                         log.info(fn)
         if len(ecsv_names) < 2:
             tkMessageBox.showinfo('Warning', 'Need at least two ECSV files')
+            self.statusbox.configure(text = f"Need at least two ECSVs, got {len(ecsv_names)}")
             return 
 
-        tmpscr = os.path.join(os.getenv('TEMP'), 'solve.ps1')
-        with open(tmpscr, 'w') as outf:
-            mcruns = 20
-            outf.write(f'cd {self.wmpl_loc}\nconda activate {self.wmpl_env}\npython -m wmpl.Formats.ECSV {ecsv_loc} -l -x -r {mcruns} -w -t 15\n')
-        _ = subprocess.run(['powershell.exe', tmpscr])
+        jdt_ref, meteor_list = loadECSVs(ecsv_names)
+
+        self.statusbox.configure(text = "Solving, please wait....")
+        self.config(cursor="watch")
+        mcruns = 5
+        max_toffset=15
+        traj = solveTrajectoryGeneric(jdt_ref, meteor_list, ecsv_loc, mc_runs=mcruns, max_toffset=max_toffset, \
+            plot_all_spatial_residuals=True, show_plots=False, enable_OSM_plot=True)
         fldrs = os.listdir(ecsv_loc)
-        print(fldrs)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
         if len(fldrs) > 0:
             log.info(f'solved into {fldrs[0]}')
@@ -581,19 +766,72 @@ class fbCollector(Frame):
                 shutil.rmtree(self.soln_outputdir)
             log.info(f'moving {os.path.join(ecsv_loc, fldrs[0])} to {self.dir_path}')
             shutil.move(os.path.join(ecsv_loc, fldrs[0]), self.dir_path)
-        tkMessageBox.showinfo('Info', 'Solver Finished')
+            self.statusbox.configure(text = "Viewing Solution")
+            self.config(cursor="")
+            self.viewSolution()
+        else:
+            self.statusbox.configure(text = "Solver FAILED")
+            self.config(cursor="")
+            self.viewData()
         return 
+    
+    def createGraphs(self):
+        pickles=[]
+        for path, _, files in os.walk(self.dir_path):
+            for name in files:
+                if '.pickle' in name and 'tmpzip' not in path:
+                    pickles.append(os.path.join(path, name))
+        if len(pickles) == 0:
+            return False
+        pickles = list(set(pickles))
+        if len(pickles) == 1:
+            pickfile = pickles[0]
+        else:
+            pickfile = tkFileDialog.askopenfilename(title='Select Orbit Pickle', defaultextension='*.pickle',
+                                        initialdir=self.dir_path, initialfile='*.pickle',
+                                        filetypes=[('pickles','*.pickle')])
+        if not pickfile:
+            return False
+
+        tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
+        with open(tmppy, 'w') as outf:
+            pickdir, pickfile = os.path.split(pickfile)
+            outf.write('from wmpl.Utils.Pickling import loadPickle\nimport os\n')
+            outf.write('from wmpl.Utils.TrajConversions import jd2Date\n')
+            outf.write(f"traj=loadPickle('{pickdir}', '{pickfile}')\n")
+            outf.write('dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")\n')
+            outf.write(f"outdir=os.path.join('{self.dir_path}', dir_name)\n")
+            outf.write('traj.savePlots(outdir,traj.file_name, show_plots=False)\n')
+        if platform.system() == 'Windows':    # Windows has to be awkward            
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.ps1')
+            shellname = 'powershell.exe'
+        else:
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.sh')
+            shellname = 'bash'
+        with open(tmpscr, 'w') as outf:
+            if platform.system() != 'Windows':
+                outf.write('eval "$(conda shell.bash hook)"\n')
+            outf.write(f'conda run -n {self.wmpl_env} python {tmppy}\n')
+        _ = subprocess.run([shellname, tmpscr])
+        os.remove(tmpscr)
+        os.remove(tmppy)
+        return True
     
     def viewSolution(self):
         self.review_stack = False
         if not self.soln_outputdir:
-            solndir = glob.glob1(self.dir_path, os.path.split(self.dir_path)[1][:8]+'*')
+            solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
             if len(solndir) == 0:
-                tkMessageBox.showinfo('Warning', 'No solution to review')
-                return
+                log.info('attempting to create graphs')
+                if not self.createGraphs():
+                    tkMessageBox.showinfo('Warning', 'No solution to review')
+                    return
+                solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
+                solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
             solndir = os.path.join(self.dir_path, solndir[0])
             self.soln_outputdir = solndir
+            log.info(f'solution dir is {solndir}')
         bin_list = [line for line in os.listdir(self.soln_outputdir) if self.correct_datafile_name(line)]
         for b in bin_list:
             self.selected[b] = (0, '')
@@ -602,7 +840,7 @@ class fbCollector(Frame):
     
     def removeSolution(self):
         if not self.soln_outputdir:
-            solndir = glob.glob1(self.dir_path, os.path.split(self.dir_path)[1][:8]+'*')
+            solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             if len(solndir) == 0:
                 tkMessageBox.showinfo('Warning', 'No solution to remove')
                 return
@@ -617,7 +855,7 @@ class fbCollector(Frame):
         return uploadOrbitGeneric(self.dir_path, self.api_key)
 
     def uploadRaw(self):
-        zfname = os.path.join(os.getenv('TMP'), os.path.basename(self.dir_path))
+        zfname = os.path.join(os.getenv('TMP', default='/tmp'), os.path.basename(self.dir_path))
         log.info(f'zfname is {zfname}')
         shutil.make_archive(zfname,'zip',self.dir_path)
         try:
@@ -625,15 +863,15 @@ class fbCollector(Frame):
             log.info(f'targname is {targname}')
             shutil.copyfile(zfname+'.zip', targname)
             tkMessageBox.showinfo('Info', 'Raw Data Uploaded to Dropbox')
-            subprocess.Popen(f'explorer "{self.share_loc}"')
+            self.openFolder(self.share_loc)
         except Exception:
             tkMessageBox.showinfo('Warning', 'Problem with upload')
         return 
     
     def viewData(self):
+        self.statusbox.configure(text = "Viewing Images")
         self.review_stack = False
         self.soln_outputdir = None
-        print(self.dir_path)
         bin_list = self.get_bin_list()
         for b in bin_list:
             self.selected[b] = (0, '')
@@ -643,11 +881,16 @@ class fbCollector(Frame):
     def getRequestedECSVs(self):
         notgotlist=[]
         img_list = self.get_bin_list()
+        numecsvs = 0
         for current_image in img_list:
             if not self.getOneEcsv(current_image):
                 notgotlist.append(current_image)
+            else:
+                numecsvs += 1
         if len(notgotlist) > 0: 
-            tkMessageBox.showinfo('Info', f'No ECSVs for {notgotlist}')
+            tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs\nNo ECSVs for {notgotlist}')
+        else:
+            tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
         return
     
     def getOneEcsv(self, current_image):
@@ -658,21 +901,17 @@ class fbCollector(Frame):
             statid = current_image[3:9]
             datestr = current_image[10:29]
         else:
-            return
+            return False
         #dtval = datetime.datetime.strptime(datestr, '%Y%m%d_%H%M%S')
         #datestr = dtval.strftime('%Y-%m-%dT%H:%M:%S')
         try:
-            lis = getECSVs(statid, datestr, savefiles=True, outdir=os.path.join(self.dir_path, statid))
-            for li in lis:
-                if 'issue getting data' in li:
-                    return False
+            ret = getECSVs(statid, datestr, outdir=os.path.join(self.dir_path, statid))
+            if not ret:
+                return False
             os.makedirs(os.path.join(self.dir_path,'ecsvs'), exist_ok=True)
-            ecsvfs = glob.glob1(os.path.join(self.dir_path, statid), '*.ecsv')
+            ecsvfs = glob.glob('*.ecsv', root_dir=os.path.join(self.dir_path, statid))
             for ecsv in ecsvfs:
                 shutil.copyfile(os.path.join(self.dir_path, statid, ecsv), os.path.join(self.dir_path, 'ecsvs', ecsv))
-
-            shutil.copyfile()
-            ## finish here
             return True
         except Exception:
             return False
@@ -713,6 +952,7 @@ class fbCollector(Frame):
                 self.listbox.itemconfig(END, fg = 'green')
 
     def checkStacks(self):
+        self.statusbox.configure(text = "Viewing Stacks")
         self.review_stack = True
         bin_list = self.get_bin_list()
         if len(bin_list) > 0:
@@ -729,15 +969,24 @@ class fbCollector(Frame):
         bin_list = self.get_bin_list()
         for b in bin_list:
             self.selected[b] = (0, '')
+        log.info(f'analysing {self.dir_path}')
         self.update_listbox(bin_list)
 
-    def openFolder(self):
-        dir_path = self.dir_path.replace("/","\\")
-        os.system(f'explorer.exe {dir_path}')
+    def openFolder(self, dir_path=None):
+        if not dir_path:
+            dir_path = self.dir_path
+        if platform.system() == 'Windows':    # Windows has to be awkward
+            dir_path = dir_path.replace("/","\\")
+            log.info(f'target path is {dir_path}')
+            os.startfile(dir_path)
+        else:
+            log.info(f'target path is {dir_path}')
+            subprocess.run(['open',dir_path])
+        return 
     
     def viewLogs(self):
-        logdir = os.path.join(os.getenv('TMP'), 'fbcollector')
-        os.system(f'explorer.exe {logdir}')
+        self.openFolder(logdir)
+        return
 
     def archiveFolder(self):
         noimgdata = img.open(noimg_file).resize((640,360))
@@ -780,7 +1029,7 @@ class fbCollector(Frame):
                 log.warning(e)
 
     def correct_datafile_name(self, line):
-        if ('.jpg' in line or '.png' in line) and 'noimage' not in line:
+        if ('.jpg' in line or '.png' in line or '_report.txt' in line) and 'noimage' not in line:
             return True
         return False
     
@@ -801,7 +1050,18 @@ class fbCollector(Frame):
                 shutil.rmtree(os.path.join(self.dir_path, ba))
             except Exception:
                 os.remove(os.path.join(self.dir_path, ba))
+        evtdate = self.newpatt.get().strip()
+        bz2file = os.path.join(self.dir_path, f'{camid}_{evtdate}_event.tar.bz2')
+        if os.path.isfile(bz2file):
+            os.remove(bz2file)
         os.remove(os.path.join(self.dir_path, 'stacks', imgname))
+        alreadychecked = [] 
+        checkedfile = os.path.join(self.dir_path,'checked.txt')
+        if os.path.isfile(checkedfile):
+            alreadychecked = [x.strip() for x in open(checkedfile, 'r').readlines()]
+        alreadychecked.append(camid)
+        with open(checkedfile,'w') as outf:
+            outf.write('\n'.join(alreadychecked))
 
     def remove_image(self):
         """ Remove the selected image from disk
@@ -847,29 +1107,42 @@ class fbCollector(Frame):
         except:
             return 0
         
-        with img.open(self.current_image).resize((640,360)) as imgdata:
-            thisimage = ImageTk.PhotoImage(imgdata)
-            self.imagelabel.configure(image = thisimage)
-            self.imagelabel.image = thisimage
-
-        self.timestamp_label.configure(text = os.path.split(self.current_image)[1])
+        if '_report.txt' not in self.current_image:
+            with img.open(self.current_image).resize((640,360)) as imgdata:
+                thisimage = ImageTk.PhotoImage(imgdata)
+                self.imagelabel.configure(image=thisimage, text='')
+                self.imagelabel.image = thisimage
+            self.timestamp_label.configure(text = os.path.split(self.current_image)[1])
+        else:
+            summarytxt = getSummaryText(self.current_image)
+            self.imagelabel.configure(text=summarytxt)
+            self.imagelabel.image = None
+            self.timestamp_label.configure(text = '')
+            # FIXME
         return 
 
     def clean_folder(self):
         stacklist = os.listdir(os.path.join(self.dir_path, 'stacks'))
         camlist = [x[:6] for x in stacklist if 'stack.jpg' in x]
-        datalist = os.listdir(self.dir_path)
-        datalist = [x for x in datalist if 'jpgs' not in x and 'mp4s' not in x and 'stacks' not in x]
+
+        # get a list of camera data folders - they all start with two uppercase letters
+        datalist = [f.path for f in os.scandir(self.dir_path) if f.is_dir()]
+        datalist = [x for x in datalist if os.path.basename(x)[0:2].isupper()]
+
+        # now remove any folders that aren't being kept
         for d in datalist:
-            keep = False
-            for c in camlist:
-                if c in d:
-                    keep = True
-            if keep is False:
-                try:
-                    os.remove(d)
-                except Exception:
-                    pass
+            stationid = os.path.basename(d)
+            if stationid in camlist:
+                continue
+            log.info(f'removing {d}')
+            shutil.rmtree(d, ignore_errors=True)
+            # remove any corresponding bz2 file
+            eventdt = self.newpatt.get().strip()
+            bz2file = os.path.join(self.dir_path, f'{stationid.upper()}_{eventdt}_event.tar.bz2')
+            log.info(f'removing {bz2file}')
+            if os.path.isfile(bz2file):
+                os.remove(bz2file)
+
         return
 
     def getData(self):
@@ -881,7 +1154,8 @@ class fbCollector(Frame):
         reqdate = datetime.datetime.strptime(self.patt, '%Y%m%d_%H%M%S')
         reqdate = reqdate + datetime.timedelta(seconds=-30)
         getLiveJpgs(reqdate.strftime('%Y%m%d_%H%M%S'), outdir=os.path.join(self.dir_path, 'jpgs'))
-        self.renameImages(self.dir_path)
+        #self.renameImages(self.dir_path)
+        self.statusbox.configure(text = "Viewing Images")
         self.update_listbox(self.get_bin_list())
 
     def getTrajpickle(self):
@@ -969,7 +1243,7 @@ class fbCollector(Frame):
         return 
 
     def getVids(self):
-        jpglist = glob.glob1(os.path.join(self.dir_path,'jpgs'), 'FF*.jpg')
+        jpglist = glob.glob('FF*.jpg', root_dir=os.path.join(self.dir_path,'jpgs'))
         os.makedirs(os.path.join(self.dir_path, 'mp4s'), exist_ok=True)
         count = 0
         for jpg in jpglist:
@@ -1004,13 +1278,11 @@ class fbCollector(Frame):
 
     def viewWatchlist(self):
         evtfile = os.path.join(self.fb_dir,'event_watchlist.txt')
-        if platform.system() == 'Darwin':       # macOS
-            procid = subprocess.Popen(('open', evtfile))
-        elif platform.system() == 'Windows':    # Windows
-            procid = subprocess.Popen(('cmd','/c',evtfile))
-        else:                                   # linux variants
-            procid = subprocess.Popen(('xdg-open', evtfile))
-        procid.wait()
+        if os.path.isfile(evtfile):
+            editTextFile(evtfile)
+        else:
+            tkMessageBox.showinfo("Warning", 'watchlist not yet available - retrieve first')
+        log.info('done editing watchfile')
         if not tkMessageBox.askyesno("Upload File", "Upload event watchlist?"):
             return
         else:
@@ -1027,6 +1299,8 @@ class fbCollector(Frame):
         scpcli = SCPClient(c.get_transport())
         log.info('getting Watchlist')
         scpcli.get('./event_watchlist.txt', self.fb_dir)
+        scpcli.close()
+        c.close()
         self.viewWatchlist()
 
     def putWatchlist(self):
@@ -1049,18 +1323,6 @@ class fbCollector(Frame):
         if len(evtdate) < 15:
             tkMessageBox.showinfo("Warning", f'Need seconds in the event date field {evtdate}')
             return
-        fbdir = self.fb_dir
-        if ':' in fbdir:
-            drv = fbdir[0].lower()
-            fbdir = '/mnt/' + drv + fbdir[2:]
-        fbdir = fbdir.replace('\\','/')
-
-        cmd = os.path.join(self.script_loc, 'download_events.sh') + f' {evtdate} {fbdir} 1'
-        if ':' in cmd:
-            drv = cmd[0].lower()
-            cmd = '/mnt/' + drv + cmd[2:]
-        cmd = cmd.replace('\\','/')
-        log.info(f'executing {cmd}')
         if self.evtMonTriggered is None:
             ret = tkMessageBox.askyesno("Warning", 'Event Monitor has not been triggered, continue?')
             if ret is False:
@@ -1070,13 +1332,16 @@ class fbCollector(Frame):
             if ret is False:
                 return
         log.info(f'getting data for {evtdate}')
-        procid = subprocess.Popen(('bash','-c', cmd))
-        procid.wait()
+        conn = scpconn(self.basedir, self.gmn_server, self.gmn_user, self.gmn_key)
+        if not conn.initialised:
+            log.info('unable to connect to GMN')
+            return 
+        conn.getEventsByRegion('UK', evtdate, self.basedir, os.path.join(self.dir_path,'checked.txt'), False)
+        conn.finish()
         tkMessageBox.showinfo("Info", 'Done')
         return 
 
     def getGMNData(self):
-        print(self.dir_path)
         camlist = [line for line in os.listdir(os.path.join(self.dir_path,'jpgs')) if self.correct_datafile_name(line)]
         dts=[]
         camids=[]
@@ -1107,7 +1372,7 @@ class fbCollector(Frame):
         for line in iter(stdout.readline, ""):
             log.info(line)
         for line in iter(stderr.readline, ""):
-            print(line, end="")
+            log.info(line)
         scpcli = SCPClient(c.get_transport())
         log.info('done, collecting output')
         indir = os.path.join(f'event_extract/{dtstr}/')
@@ -1183,7 +1448,6 @@ def uploadOrbitGeneric(orbdir, api_key):
         headers = {'Content-type': 'application/zip', 'Slug': orbname[:15], 'apikey': api_key}
         url = f'https://api.ukmeteors.co.uk/fireballfiles?orbitfile={orbname[:15]}.zip'
         r = requests.put(url, data=open(zfname+'.zip', 'rb'), headers=headers) #, auth=('username', 'pass'))
-        #print(r.text)
         if r.status_code != 200:
             tkMessageBox.showinfo('Warning', f'Problem with upload, {r.status_code}')
         else:
@@ -1193,26 +1457,14 @@ def uploadOrbitGeneric(orbdir, api_key):
         tkMessageBox.showinfo('Info', 'Zip File created')
     
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--datepatt", type=str, help="date pattern to retrieve")
-    args = parser.parse_args()
 
-    dir_ = os.getcwd()
-    config_file = os.path.join(dir_, 'config.ini')
-    if not os.path.isfile(config_file):
-        shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
-        tkMessageBox.showinfo("Config Missing", 'Please configure before using')
-        showConfig()
-
-    noimg_file = os.path.join(dir_, 'noimage.jpg')
-
-    log = logging.getLogger(__name__)
+def setupLogging(logdir):
     log.setLevel(logging.INFO)
 
-    logdir = os.path.join(os.getenv('TMP'), 'fbcollector')
     os.makedirs(logdir, exist_ok=True)
-    log_file = os.path.join(logdir, log_timestamp() + '.log')
+    logname = f"{fblogger}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+
+    log_file = os.path.join(logdir, logname)
     handler = logging.handlers.TimedRotatingFileHandler(log_file, when='D', interval=1)  # Log to a different file each day
     handler.setLevel(logging.INFO)
 
@@ -1226,8 +1478,32 @@ if __name__ == '__main__':
     ch.setFormatter(formatter)
     log.addHandler(ch)
 
+    return 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--datepatt", type=str, help="date pattern to retrieve")
+    parser.add_argument("-c", "--config", type=str, help="location of config file")
+    args = parser.parse_args()
+
+    if args.config:
+        config_file = args.config
+        dir_ = os.path.split(config_file)[0]
+    else:
+        dir_ = os.getcwd()
+        config_file = os.path.join(dir_, 'config.ini')
+    if not os.path.isfile(config_file):
+        shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
+        tkMessageBox.showinfo("Config Missing", 'Please configure before using')
+
+    noimg_file = os.path.join(dir_, 'noimage.jpg')
+
+    setupLogging(logdir)
+
     # Log program start
     log.info("Program start")
+    log.info(sys.version)
+    log.info(f'app version {appversion}')
     log.info(f'config file is {config_file}')
 
 
@@ -1238,7 +1514,8 @@ if __name__ == '__main__':
     log.info(f'patt is {targdir}')
 
     app = fbCollector(root, patt=targdir)
-    root.iconbitmap(os.path.join(dir_,'ukmda.ico'))
+    if platform.system() == 'Windows':
+        root.iconbitmap(os.path.join(dir_,'ukmda.ico'))
     root.protocol('WM_DELETE_WINDOW', app.quitApplication)
 
     root.mainloop()
