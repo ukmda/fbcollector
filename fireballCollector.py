@@ -365,6 +365,7 @@ class fbCollector(Frame):
         self.log_files_to_keep = 30
         self.script_loc = os.path.split(config_file)[0]
         self.conda_exe = ''
+        self.patt = ''
 
         self.readConfig()
 
