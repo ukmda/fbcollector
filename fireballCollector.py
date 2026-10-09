@@ -404,6 +404,7 @@ class fbCollector(Frame):
 
         localcfg = loadConfig()
         self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
+        log.info(f'self.fb_dir is {self.fb_dir}')
         if self.fb_dir is None or self.fb_dir == '':
             log.info('im here')
             self.reviewConfig()
