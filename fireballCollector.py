@@ -233,21 +233,26 @@ class cfgDialog(Dialog):
 
     def ok_pressed(self):
         self.cfgdata['Fireballs']['basedir'] = self.basedir_box.get().strip()
-        self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
-        self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
-        self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
-        self.cfgdata['solver']['wmpl_env'] = self.wmplenv_box.get().strip()
-        self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
-        self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
-        self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
-        self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
-        self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
-        self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
-        saveConfig(self.cfgdata)
-        self.destroy()
+        if self.cfgdata['Fireballs']['basedir'] == '':
+            tkMessageBox.showinfo('Warning', 'Must set at least base dir')
+        else:
+            self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
+            self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
+            self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
+            self.cfgdata['solver']['wmpl_env'] = self.wmplenv_box.get().strip()
+            self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
+            self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
+            self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
+            self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
+            self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
+            self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
+            saveConfig(self.cfgdata)
+            self.destroy()
+            self.status = True
 
     def cancel_pressed(self):
         self.destroy()
+        self.status = False
 
     def buttonbox(self):
         self.ok_button = tk.Button(self, text='OK', width=5, command=self.ok_pressed)
@@ -623,8 +628,7 @@ class fbCollector(Frame):
         log.info('initUI completed')
 
     def reviewConfig(self):
-        _ = cfgDialog(self)
-        log.info('done editing config')
+        res = cfgDialog(self)
         self.readConfig()
         self.initUI()
 
