@@ -232,11 +232,12 @@ class cfgDialog(Dialog):
         return
 
     def ok_pressed(self):
-        fbdir = self.basedir_box.get().strip()
-        if fbdir == '' or fbdir is None:
+        basedir = self.basedir_box.get().strip()
+        log.info(f'basedir is "{basedir}"')
+        if basedir == '' or basedir is None:
             tkMessageBox.showinfo('Warning', 'Must set at least base dir')
         else:
-            self.cfgdata['Fireballs']['basedir'] = fbdir
+            self.cfgdata['Fireballs']['basedir'] = basedir
             self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
             self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
             self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
