@@ -645,7 +645,7 @@ class fbCollector(Frame):
             self.initUI()
 
     def showDocs(self):
-        webbrowser.open('README.html')
+        webbrowser.open('USAGE.html')
         return 
 
     def reduceCamera(self):

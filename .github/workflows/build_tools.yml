@@ -40,7 +40,7 @@ jobs:
         with:
           type: 'zip'
           filename: 'fireball_collector.zip'
-          exclusions: '/.git* /__pycache__/* /.vscode* .gitignore *.md *.yaml *.spec *.iss *.toml tests/* /.pytest*'
+          exclusions: '/.git/* /.github/* /__pycache__/* /.vscode/* .gitignore *.md *.yaml *.spec *.iss *.toml tests/* /.pytest*'
       #  run: |
       #    echo "running build step"
       #    pip install -r requirements.txt
