@@ -393,7 +393,6 @@ class fbCollector(Frame):
     def readConfig(self):
         if not os.path.isfile(config_file):
             shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
-            tkMessageBox.showinfo("Config Missing", 'Please configure before using')
             self.reviewConfig()
 
         localcfg = loadConfig()
