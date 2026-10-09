@@ -233,7 +233,6 @@ class cfgDialog(Dialog):
 
     def ok_pressed(self):
         basedir = self.basedir_box.get().strip()
-        log.info(f'basedir is "{basedir}"')
         if basedir == '' or basedir is None:
             tkMessageBox.showinfo('Warning', 'Must set at least base dir')
         else:
@@ -253,8 +252,12 @@ class cfgDialog(Dialog):
             self.status = True
 
     def cancel_pressed(self):
-        self.destroy()
-        self.status = False
+        basedir = self.basedir_box.get().strip()
+        if basedir == '' or basedir is None:
+            tkMessageBox.showinfo('Warning', 'Must set at least base dir')
+        else:
+            self.destroy()
+            self.status = False
 
     def buttonbox(self):
         self.ok_button = tk.Button(self, text='OK', width=5, command=self.ok_pressed)
@@ -373,15 +376,17 @@ class fbCollector(Frame):
         self.script_loc = os.path.split(config_file)[0]
         self.conda_exe = ''
         self.patt = ''
+        self.firstpass = True
 
         self.readConfig()
 
+        self.firstpass = False
         self.patt = patt
         if patt is None:
             self.dir_path = self.fb_dir.strip()
         else:
             self.dir_path = os.path.join(self.fb_dir, patt)
-        log.info(f'Fireball folder is {self.fb_dir}')
+        log.info(f'Fireball basedir is {self.fb_dir}')
         log.info(f'Scripts folder is {self.script_loc}')
 
         self.initUI()
@@ -404,11 +409,10 @@ class fbCollector(Frame):
 
         localcfg = loadConfig()
         self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
-        log.info(f'self.fb_dir is {self.fb_dir}')
         if self.fb_dir is None or self.fb_dir == '':
-            log.info('im here')
             self.reviewConfig()
 
+        localcfg = loadConfig()
         self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
         self.basedir = self.fb_dir
         os.makedirs(self.fb_dir, exist_ok=True)
@@ -536,10 +540,10 @@ class fbCollector(Frame):
         else:
             wmplavailable = 'disabled'
 
-        log.info(f'rms available   {rmsavailable}')
-        log.info(f'share available {shareavailable}')
-        log.info(f'gmn available   {gmnavailable}')
-        log.info(f'wmpl available  {wmplavailable}')
+        log.info(f'rms   {rmsavailable}')
+        log.info(f'share {shareavailable}')
+        log.info(f'gmn   {gmnavailable}')
+        log.info(f'wmpl  {wmplavailable}')
 
         rawMenu = Menu(self.menuBar, tearoff=0)
         rawMenu.add_command(label="Get Live Images", command=self.getData)
@@ -637,7 +641,8 @@ class fbCollector(Frame):
     def reviewConfig(self):
         res = cfgDialog(self)
         self.readConfig()
-        self.initUI()
+        if not self.firstpass:
+            self.initUI()
 
     def showDocs(self):
         webbrowser.open('README.html')
@@ -1491,7 +1496,6 @@ def setupLogging(logdir):
 
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s: %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
     ch.setFormatter(formatter)
     log.addHandler(ch)
 
