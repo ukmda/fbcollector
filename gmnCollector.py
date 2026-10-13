@@ -124,9 +124,6 @@ class scpconn():
             self.getEventsByCountry(ctry, eventdt, basedir, skipfile, skipsftp)
 
 
-
-
-
 if __name__ == '__main__':
     conn = scpconn('.', 'gmn.uwo.ca','analysis', '~/.ssh/gmnanalysis')
     conn.getListOfStations('ua')
