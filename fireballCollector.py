@@ -95,10 +95,17 @@ def getSummaryText(txtfile):
     return '\n'.join(res)
 
 
-def loadConfig():
+def updateConfigEntry(section, key, value, cfg_file=None):
+    localcfg = loadConfig(cfg_file)
+    value = value.replace('\\', '/')
+    localcfg[section][key] = value
+    saveConfig(localcfg, cfg_file)
 
+def loadConfig(cfg_file=None):
+    if cfg_file is None:
+        cfg_file = config_file
     localcfg = configparser.ConfigParser()
-    localcfg.read(config_file)
+    localcfg.read(cfg_file)
     if 'conda' not in localcfg['Fireballs']:
         conda_exe = os.getenv('CONDA_EXE')
         if conda_exe is None: 
@@ -112,8 +119,10 @@ def loadConfig():
     return localcfg
 
 
-def saveConfig(cfgdata):
-    with open(config_file,'w') as outf:
+def saveConfig(cfgdata, cfg_file=None):
+    if cfg_file is None:
+        cfg_file = config_file
+    with open(cfg_file,'w') as outf:
         cfgdata.write(outf)
     return 
 
@@ -162,9 +171,6 @@ class cfgDialog(Dialog):
         self.wmplloc_label = tk.Label(frame, width=25, text="Location", anchor='w')
         self.wmplloc_box = tk.Entry(frame, width=50)
         self.wmplloc_box.insert(tk.END, self.cfgdata['solver']['wmpl_loc'])
-        self.wmplenv_label = tk.Label(frame, width=25, text="Python Env Name", anchor='w')
-        self.wmplenv_box = tk.Entry(frame, width=50)
-        self.wmplenv_box.insert(tk.END, self.cfgdata['solver']['wmpl_env'])
 
         # sharing
         self.share_label = tk.Label(frame, width=25, text="Optional Sharing", anchor='w')
@@ -240,7 +246,6 @@ class cfgDialog(Dialog):
             self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
             self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
             self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
-            self.cfgdata['solver']['wmpl_env'] = self.wmplenv_box.get().strip()
             self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
             self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
             self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
@@ -363,7 +368,6 @@ class fbCollector(Frame):
         self.gmn_user = ''
         self.gmn_server = ''
         self.wmpl_loc = ''
-        self.wmpl_env = ''
         self.rms_loc = ''
         self.rms_env = ''
         self.api_key = None
@@ -439,7 +443,6 @@ class fbCollector(Frame):
         self.wmpl_loc = None
         if localcfg.has_option('solver','wmpl_loc'):
             self.wmpl_loc = os.path.expanduser(localcfg['solver']['wmpl_loc'].replace('$HOME','~')).replace('\\','/')
-            self.wmpl_env= localcfg['solver']['wmpl_env']
 
         self.rms_loc = None
         if localcfg.has_option('reduction','rms_loc'):
@@ -798,6 +801,17 @@ class fbCollector(Frame):
         return 
     
     def createGraphs(self):
+        if self.wmpl_loc not in sys.path:
+            sys.path.insert(0, self.wmpl_loc)
+        try:
+            from wmpl.Utils.Pickling import loadPickle
+            from wmpl.Utils.TrajConversions import jd2Date
+        except Exception as e:
+            log.warning('wmpl not available')
+            log.warning(e)
+            self.statusbox.configure(text = "WMPL unavailable, can't update charts")
+            return
+
         pickles=[]
         for path, _, files in os.walk(self.dir_path):
             for name in files:
@@ -815,28 +829,12 @@ class fbCollector(Frame):
         if not pickfile:
             return False
 
+        pickdir, pickfile = os.path.split(pickfile)
+        traj=loadPickle(pickdir, pickfile)
+        dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")
+        outdir=os.path.join(self.dir_path, dir_name)
         tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
-        with open(tmppy, 'w') as outf:
-            pickdir, pickfile = os.path.split(pickfile)
-            outf.write('from wmpl.Utils.Pickling import loadPickle\nimport os\n')
-            outf.write('from wmpl.Utils.TrajConversions import jd2Date\n')
-            outf.write(f"traj=loadPickle('{pickdir}', '{pickfile}')\n")
-            outf.write('dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")\n')
-            outf.write(f"outdir=os.path.join('{self.dir_path}', dir_name)\n")
-            outf.write('traj.savePlots(outdir,traj.file_name, show_plots=False)\n')
-        if platform.system() == 'Windows':    # Windows has to be awkward            
-            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.ps1')
-            shellname = 'powershell.exe'
-        else:
-            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.sh')
-            shellname = 'bash'
-        with open(tmpscr, 'w') as outf:
-            if platform.system() != 'Windows':
-                outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda run -n {self.wmpl_env} python {tmppy}\n')
-        _ = subprocess.run([shellname, tmpscr])
-        os.remove(tmpscr)
-        os.remove(tmppy)
+        traj.savePlots(outdir, traj.file_name, show_plots=False)
         return True
     
     def viewSolution(self):
