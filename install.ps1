@@ -15,6 +15,8 @@ Function Test-IsCommand {
 }
 #end function test-CommandExists
 
+pushd $psscriptroot
+
 $fbenv = "fbcollector"
 $gotconda = (test-iscommand conda)
 $envactive = ($env:conda_default_env -eq $fbenv)
@@ -27,6 +29,7 @@ if ($gotconda) {
     if ($gotenv -eq $false) { echo "creating conda environment" ; conda create -y -n $fbenv python=3.12 }
 	if ($envactive -eq $false) { conda activate $fbenv }
 	pip install -r $psscriptroot\requirements.txt
+    copy $PSScriptRoot\config.ini.sample $PSScriptRoot\config.ini
 }
 else {
 	echo ""
@@ -36,6 +39,27 @@ else {
 	echo ""
 	pause
 }
+# prompt the user to provide a basedir
+$basedir = "nowhere"
+while ($basedir -eq "nowhere" ) {
+    $basedir = read-host -prompt "`n`nPlease enter the full path to where you will store fireball data (basedir)"
+    if ($rmsloc -eq  "") {
+        Write-Output "You'll be prompted to update the config file when you first run the app. "
+        $basedir = "none"
+    }
+    else
+    {
+        if ((test-path $basedir) -eq $false) {
+            mkdir $basedir
+        }
+    }
+}
+if ($basedir -ne "none") {
+    $basedir = $basedir.replace("\","/")
+    python -c "from fireballCollector import updateConfigEntry; updateConfigEntry('Fireballs','basedir','${basedir}','./config.ini');"
+}
+
+# lets find WMPL or ask the user for its location. 
 $wmplloc = "$HOME/src/WesternMeteorPyLib"
 if ((test-path $wmplloc\UpdateOrbitFiles.py) -eq $true) {
     echo "`nWMPL found at $wmplloc"
@@ -65,8 +89,31 @@ else {
         }
     }
 }
-echo "TODO do something to store wmplloc in the config file"
+$wmplloc = $wmplloc.replace("\","/")
+python -c "from fireballCollector import updateConfigEntry; updateConfigEntry('solver','wmpl_loc','${wmplloc}','./config.ini');"
+
+# now we will find RMS
+$rmsloc = "nowhere"
+while ($rmsloc -eq "nowhere" ) {
+    $rmsloc = read-host -prompt "`n`nPlease enter the full path to RMS or press <enter> to skip"
+    if ($rmsloc -eq  "") {
+        Write-Output "To reduce raw data, install RMS and then update this app's configuration."
+        $rmsloc = "none"
+    }
+    else
+    {
+        if ((test-path $rmsloc\RMS\StartCapture.py) -eq $false) {
+            echo "RMS not found in $rmsloc, please re-enter"
+            $wmplloc = "nowhere"
+        }
+    }
+}
+if ($rmsloc -ne "none") {
+    $rmsloc = $rmsloc.replace("\","/")
+    python -c "from fireballCollector import updateConfigEntry; updateConfigEntry('reduction','rms_loc','${rmsloc}','./config.ini');"
+}
 
 if ($envactive -eq $false) { conda deactivate }
 echo ""
 echo "done. To use the application, run .\fbCollector.ps1"
+popd
