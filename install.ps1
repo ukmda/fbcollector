@@ -59,7 +59,7 @@ if ($basedir -ne "none") {
     python -c "from fireballCollector import updateConfigEntry; updateConfigEntry('Fireballs','basedir','${basedir}','./config.ini');"
 }
 
-# lets find WMPL or ask the user for its location. 
+# lets find WMPL or ask the user for its location.
 $wmplloc = "$HOME/src/WesternMeteorPyLib"
 if ((test-path $wmplloc\UpdateOrbitFiles.py) -eq $true) {
     echo "`nWMPL found at $wmplloc"

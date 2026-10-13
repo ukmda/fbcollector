@@ -211,10 +211,8 @@ class cfgDialog(Dialog):
         self.rmsloc_box.grid(column=1, row=3)
 
         self.wmpl_label.grid(column=0, row=4)
-        self.wmplenv_label.grid(column=0, row=5)
-        self.wmplenv_box.grid(column=1, row=5)
-        self.wmplloc_label.grid(column=0, row=6)
-        self.wmplloc_box.grid(column=1, row=6)
+        self.wmplloc_label.grid(column=0, row=5)
+        self.wmplloc_box.grid(column=1, row=5)
 
         self.share_label.grid(column=0, row=7)
         self.shareloc_label.grid(column=0, row=8)
@@ -646,6 +644,7 @@ class fbCollector(Frame):
         self.readConfig()
         if not self.firstpass:
             self.initUI()
+            self.viewData()
 
     def showDocs(self):
         webbrowser.open('USAGE.html')
@@ -801,6 +800,7 @@ class fbCollector(Frame):
         return 
     
     def createGraphs(self):
+        self.statusbox.configure(text = "Creating graphs....")
         if self.wmpl_loc not in sys.path:
             sys.path.insert(0, self.wmpl_loc)
         try:
@@ -835,9 +835,11 @@ class fbCollector(Frame):
         outdir=os.path.join(self.dir_path, dir_name)
         tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
         traj.savePlots(outdir, traj.file_name, show_plots=False)
+        self.statusbox.configure(text = "Done")
         return True
     
     def viewSolution(self):
+        self.statusbox.configure(text = "Viewing Solution")
         self.review_stack = False
         if not self.soln_outputdir:
             solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
