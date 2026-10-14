@@ -38,12 +38,13 @@ else {
     echo "see the README for more details."
 	echo ""
 	pause
+    exit
 }
 # prompt the user to provide a basedir
 $basedir = "nowhere"
 while ($basedir -eq "nowhere" ) {
     $basedir = read-host -prompt "`n`nPlease enter the full path to where you will store fireball data (basedir)"
-    if ($rmsloc -eq  "") {
+    if ($basedir -eq  "") {
         Write-Output "You'll be prompted to update the config file when you first run the app. "
         $basedir = "none"
     }
@@ -60,33 +61,38 @@ if ($basedir -ne "none") {
 }
 
 # lets find WMPL or ask the user for its location.
-$wmplloc = "$HOME/src/WesternMeteorPyLib"
-if ((test-path $wmplloc\UpdateOrbitFiles.py) -eq $true) {
-    echo "`nWMPL found at $wmplloc"
+$wmplloc = "nowhere"
+$testwmplloc = "$HOME/src/WesternMeteorPyLib"
+if ((test-path $testwmplloc\UpdateOrbitFiles.py) -eq $true) {
+    echo "`nWMPL found at $testwmplloc"
+    $wmplloc = $testwmplloc
 }
-else {
-    $wmplloc = "nowhere"
-    while ($wmplloc -eq "nowhere" ) {
-        $wmplloc = read-host -prompt "`n`nPlease enter the full path to WMPL or press <enter> to install it "
-        if ($wmplloc -eq  "") {
-            $wmplloc = "$HOME/src/WesternMeteorPyLib"
-            echo "installing WMPL into $wmplloc"
-            mkdir ~/src
-            pushd ~/src
-            git clone --recursive https://github.com/wmpg/WesternMeteorPyLib.git
-            cd WesternMeteorPyLib
-            Remove-Item -Recurse wmpl/MetSim
-            Remove-Item -Recurse wmpl/CAMO
-            Remove-Item wmpl/Utils/DynamicMassFit.py
-            python ./UpdateOrbitFiles.py
-            curl "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de430.bsp" -o $wmplloc/wmpl/share/de430.bsp
-            python -c "from wmpl.Utils.ShowerAssociation import loadGMNShowerTable"
-            popd
-        }
-        if ((test-path $wmplloc\UpdateOrbitFiles.py) -eq $false) {
-            echo "WMPL not found in $wmplloc, please re-enter"
-            $wmplloc = "nowhere"
-        }
+$testwmplloc = "$HOME/source/WesternMeteorPyLib"
+if ((test-path $testwmplloc\UpdateOrbitFiles.py) -eq $true) {
+    echo "`nWMPL found at $testwmplloc"
+    $wmplloc = $testwmplloc
+}
+
+while ($wmplloc -eq "nowhere" ) {
+    $wmplloc = read-host -prompt "`n`nPlease enter the full path to WMPL or press <enter> to install it "
+    if ($wmplloc -eq  "") {
+        $wmplloc = "$HOME/src/WesternMeteorPyLib"
+        echo "installing WMPL into $wmplloc"
+        if ((test-path ~/src) -eq $false) {mkdir ~/src}
+        pushd ~/src
+        git clone --recursive https://github.com/wmpg/WesternMeteorPyLib.git
+        cd WesternMeteorPyLib
+        Remove-Item -Recurse wmpl/MetSim
+        Remove-Item -Recurse wmpl/CAMO
+        Remove-Item wmpl/Utils/DynamicMassFit.py
+        python ./UpdateOrbitFiles.py
+        curl "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de430.bsp" -o $wmplloc/wmpl/share/de430.bsp
+        python -c "from wmpl.Utils.ShowerAssociation import loadGMNShowerTable"
+        popd
+    }
+    if ((test-path $wmplloc\UpdateOrbitFiles.py) -eq $false) {
+        echo "WMPL not found in $wmplloc, please re-enter"
+        $wmplloc = "nowhere"
     }
 }
 $wmplloc = $wmplloc.replace("\","/")
@@ -94,6 +100,16 @@ python -c "from fireballCollector import updateConfigEntry; updateConfigEntry('s
 
 # now we will find RMS
 $rmsloc = "nowhere"
+$testrmsloc = "$HOME/src/RMS"
+if ((test-path $testrmsloc\RMS\StartCapture.py) -eq $true) {
+    echo "`nRMS found at $testrmsloc"
+    $rmsloc = $testrmsloc
+}
+$testrmsloc = "$HOME/source/RMS"
+if ((test-path $testrmsloc\RMS\StartCapture.py) -eq $true) {
+    echo "`nRMS found at $testrmsloc"
+    $rmsloc = $testrmsloc
+}
 while ($rmsloc -eq "nowhere" ) {
     $rmsloc = read-host -prompt "`n`nPlease enter the full path to RMS or press <enter> to skip"
     if ($rmsloc -eq  "") {
@@ -104,7 +120,7 @@ while ($rmsloc -eq "nowhere" ) {
     {
         if ((test-path $rmsloc\RMS\StartCapture.py) -eq $false) {
             echo "RMS not found in $rmsloc, please re-enter"
-            $wmplloc = "nowhere"
+            $rmsloc = "nowhere"
         }
     }
 }
