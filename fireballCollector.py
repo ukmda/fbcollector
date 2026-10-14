@@ -106,7 +106,7 @@ def loadConfig(cfg_file=None):
         cfg_file = config_file
     localcfg = configparser.ConfigParser()
     localcfg.read(cfg_file)
-    if 'conda' not in localcfg['Fireballs']:
+    if 'conda' not in localcfg['Fireballs'] or localcfg['Fireballs']['conda'] == '':
         conda_exe = os.getenv('CONDA_EXE')
         if conda_exe is None: 
             if platform.system() == 'Windows':    # Windows has to be awkward
@@ -116,6 +116,7 @@ def loadConfig(cfg_file=None):
         if conda_exe is None: 
             conda_exe = ''
         localcfg['Fireballs']['conda'] = conda_exe
+        saveConfig(localcfg, cfg_file)
     return localcfg
 
 
@@ -313,13 +314,16 @@ def getECSVs(stationID, dateStr, outdir='.'):
 
 def _download(url, outdir, fname=None):
     get_response = requests.get(url, stream=True)
-    if fname is None:
-        fname = url.split('?')[0].split("/")[-1]
-    with open(os.path.join(outdir, fname), 'wb') as f:
-        for chunk in get_response.iter_content(chunk_size=4096):
-            if chunk: # filter out keep-alive new chunks
-                f.write(chunk)
-    return fname
+    if get_response.status_code == 200:
+        if fname is None:
+            fname = url.split('?')[0].split("/")[-1]
+        with open(os.path.join(outdir, fname), 'wb') as f:
+            for chunk in get_response.iter_content(chunk_size=4096):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+        return fname
+    else:
+        return None
 
 
 def getLiveJpgs(dtstr, outdir=None):
@@ -344,9 +348,12 @@ def getLiveJpgs(dtstr, outdir=None):
         try:
             jpgurl = thisimg.urls['url']
             fname = _download(jpgurl, outdir)
-            log.info(f'retrieved {fname}')
+            if fname:
+                log.info(f'retrieved {fname}')
+            else:
+                log.warning(f'image {thisimg.urls["imgtitle"]} unavailable')
         except:
-            log.warning(f'{img.image_name} unavailable')
+            log.warning(f'image {thisimg.urls["imgtitle"]} unavailable')
 
 
 class fbCollector(Frame):
@@ -1466,7 +1473,9 @@ def uploadOrbitGeneric(orbdir, api_key):
     except Exception:
         pass
 
-    if api_key: 
+    zipsizemb = os.path.getsize(f'{zfname}.zip')/1024/1024
+    
+    if api_key and zipsizemb < 10.0: 
         headers = {'Content-type': 'application/zip', 'Slug': orbname[:15], 'apikey': api_key}
         url = f'https://api.ukmeteors.co.uk/fireballfiles?orbitfile={orbname[:15]}.zip'
         r = requests.put(url, data=open(zfname+'.zip', 'rb'), headers=headers) #, auth=('username', 'pass'))
@@ -1476,7 +1485,7 @@ def uploadOrbitGeneric(orbdir, api_key):
             tkMessageBox.showinfo('Info', 'Orbit Uploaded')
         return 
     else:
-        tkMessageBox.showinfo('Info', 'Zip File created')
+        tkMessageBox.showinfo('Info', 'Zip File created, please upload to a filesharing site\nthen send a link to fireballs@ukmeteornetwork.org')
     
 
 
