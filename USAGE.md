@@ -1,32 +1,35 @@
 # Using the Fireball Collector
 
 ## Basic usage
-To run the application type `~/src/fbcollector/fbcollector/ps1` or `~/src/fbcollector/fbcollector/sh` as appropriate for your platform. 
+To run the application open a Powershell or Terminal window, change directory to the application folder and run  `./fbcollector.ps1` or `./fbcollector.sh` as appropriate for your platform. 
 
-You can optionally use the `-d` parameter to provide the directory of your raw data. eg 
+You can add the `-d` parameter to provide the directory of your raw data. eg 
 ``` pwsh
 ~/src/fbcollector/fbcollector/ps1 -d c:\users\yourname\fireballs\20261010_202504
 ```
-This would launch the tool and open the data in the target folder. 
+This will launch the tool and open the data in the target folder. 
 
 ## Configuration
 * The first time you launch the app, you may be asked to configure the application.
-* Update at least the values of `basedir`, `rms_loc`, `rms_env`, `wmpl_loc`, as appropriate and save. 
+* Update at least the values of `basedir`, `rms_loc`, `rms_env` and `wmpl_loc`, as appropriate and save. 
 * Configuration can be updated at any time from the `Configuration` item on the `File` menu. 
 
 ## Using the App
 ### Getting Raw Data
+The tool can retrieve images from the UKMON livestream up for to a month in the past. 
+
 * Enter a date and time in the format `YYYYMMDD_HHMMSS` into the `Image Selection` box, then click "Get Images". 
   * After a few seconds, the listbox below should be populated with images from around the time you selected, provided the UKMON live feed captured something. 
-  * If nothing appears, check the UKMON [livestream](https://archive.ukmeteors.co.uk/live/index.html) to make sure you chose a suitable time. 
+  * If nothing appears, check the UKMON [livestream](https://archive.ukmeteors.co.uk/live/index.html) to make sure you chose a suitable date and time. 
   
 * Go through the image list and press the `Delete` key to delete any that you are not interested in. 
 
-* Once you've whittled the list down to just the interesting events, you can select `Get ECSVs` from the `Raw` menu. This will attempt to get raw track data for each image in [ECSV](https://docs.astropy.org/en/stable/api/astropy.io.ascii.Ecsv.html) format. 
+* Once you've whittled the list down to just the interesting events, you can select `Get ECSVs` from the `Raw` menu. This will attempt to get raw meteor track data for each image in [ECSV](https://docs.astropy.org/en/stable/api/astropy.io.ascii.Ecsv.html) format. 
+  
 * You can also click `Get Videos` to collect any video data thats available. 
 
 ### Manually Reducing an Image
-If you have a FITS or FR file from RMS along with the camera's config and platepar files, and you installed RMS, you can analyse the data using RMS's `SkyFit2` tool. 
+If you have FF fits or FR bin files from RMS along with the camera's config and platepar files, and you installed RMS, you can analyse the raw data using RMS's `SkyFit2` tool. 
 
 From the `File` menu, select `Open in Explorer`. You'll see there are a number of folders, one per camera.
 

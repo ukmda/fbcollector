@@ -35,6 +35,7 @@ jobs:
         run: |
           pip install markdown2
           markdown2 ./USAGE.md > USAGE.html
+          markdown2 ./README.md > INSTALL.html
       - name: package
         uses: thedoctor0/zip-release@0.7.5
         with:
