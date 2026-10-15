@@ -7,7 +7,7 @@ basedir=
 conda= 
 
 [reduction]
-# To use the reduction options RMS must be installed and an RMS python conda environment created 
+# To use the reduction options RMS must be installed and an RMS python environment created 
 rms_loc=
 rms_env=RMS
 

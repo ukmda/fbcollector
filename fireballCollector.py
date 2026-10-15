@@ -679,22 +679,39 @@ class fbCollector(Frame):
         else:
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
+        gotconda = 1
         with open(tmpscr, 'w') as outf:
             outf.write(f'cd {self.rms_loc}\n')
-            if platform.system() != 'Windows':    # Windows has to be awkward
+            if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
+                # test if we have a python virtualenv in the standard Linux location
+                outf.write('source ~/vRMS/bin/activate\n')
+                gotconda = 0
+            elif platform.system() != 'Windows':
+                # initialse the conda shell
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
-
+            if gotconda: 
+                outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            else:
+                outf.write(f'python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
         _ = subprocess.run([shellname, tmpscr])
+
         frs = glob.glob(os.path.join(dirname, 'FR*.bin'))
         if len(frs) > 0:
             if tkMessageBox.askyesno("Rerun", f'{len(frs)} FR files detected - rerun?'):
                 for fr in frs:
                     with open(tmpscr, 'w') as outf:
                         outf.write(f'cd {self.rms_loc}\n')
-                        if platform.system() != 'Windows':    # Windows has to be awkward
+                        if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
+                            # test if we have a python virtualenv in the standard Linux location
+                            outf.write('source ~/vRMS/bin/activate\n')
+                            gotconda = 0
+                        elif platform.system() != 'Windows':
+                            # initialse the conda shell
                             outf.write('eval "$(conda shell.bash hook)"\n')
-                        outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                        if gotconda: 
+                            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                        else:
+                            outf.write(f'python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                     _ = subprocess.run([shellname, tmpscr])
         try:
             os.remove(tmpscr)
@@ -908,18 +925,14 @@ class fbCollector(Frame):
         return 
     
     def getRequestedECSVs(self):
-        notgotlist=[]
         img_list = self.get_bin_list()
         numecsvs = 0
         for current_image in img_list:
             if not self.getOneEcsv(current_image):
-                notgotlist.append(current_image)
+                log.info(f' no ecsv for {current_image}')
             else:
                 numecsvs += 1
-        if len(notgotlist) > 0: 
-            tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs\nNo ECSVs for {notgotlist}')
-        else:
-            tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
+        tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
         return
     
     def getOneEcsv(self, current_image):
