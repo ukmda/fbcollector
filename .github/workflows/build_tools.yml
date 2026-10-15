@@ -62,6 +62,6 @@ jobs:
           tags: true
           #draft: true
           overwrite: true
-          tag_name: 2026.9.0
+          tag_name: 2026.10.0
           # default_release_name: Tool to Gather Fireball data 
-          default_release_body_path: ./release_notes.txt
+          # default_release_body_path: ./release_notes.txt
