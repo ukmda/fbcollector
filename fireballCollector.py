@@ -106,17 +106,6 @@ def loadConfig(cfg_file=None):
         cfg_file = config_file
     localcfg = configparser.ConfigParser()
     localcfg.read(cfg_file)
-    if 'conda' not in localcfg['Fireballs'] or localcfg['Fireballs']['conda'] == '':
-        conda_exe = os.getenv('CONDA_EXE')
-        if conda_exe is None: 
-            if platform.system() == 'Windows':    # Windows has to be awkward
-                conda_exe = os.path.expanduser('~/miniconda3/Scripts/conda.exe')
-            else:
-                conda_exe = os.path.expanduser('~/miniconda3/bin/conda')            
-        if conda_exe is None: 
-            conda_exe = ''
-        localcfg['Fireballs']['conda'] = conda_exe
-        saveConfig(localcfg, cfg_file)
     return localcfg
 
 
@@ -197,11 +186,6 @@ class cfgDialog(Dialog):
         self.ukmonapikey_box = tk.Entry(frame, width=50)
         self.ukmonapikey_box.insert(tk.END, self.cfgdata['ukmon']['apikey'])
 
-        # conda location
-        self.conda_label = tk.Label(frame, width=25, text="Conda Location", anchor='w')
-        self.conda_box = tk.Entry(frame, width=50)
-        self.conda_box.insert(tk.END, self.cfgdata['Fireballs']['conda'])
-
         # now put into grid
         self.basedir_label.grid(column=0, row=0)
         self.basedir_box.grid(column=1, row=0)
@@ -231,9 +215,6 @@ class cfgDialog(Dialog):
         self.ukmonapikey_label.grid(column=0, row=14)
         self.ukmonapikey_box.grid(column=1, row=14)
 
-        self.conda_label.grid(column=0, row=16)
-        self.conda_box.grid(column=1, row=16)
-
         return
 
     def ok_pressed(self):
@@ -250,7 +231,6 @@ class cfgDialog(Dialog):
             self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
             self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
             self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
-            self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
             saveConfig(self.cfgdata)
             self.destroy()
             self.status = True
@@ -382,8 +362,6 @@ class fbCollector(Frame):
         self.review_stack = False
         self.soln_outputdir = None
         self.log_files_to_keep = 30
-        self.script_loc = os.path.split(config_file)[0]
-        self.conda_exe = ''
         self.patt = ''
         self.firstpass = True
 
@@ -396,7 +374,6 @@ class fbCollector(Frame):
         else:
             self.dir_path = os.path.join(self.fb_dir, patt)
         log.info(f'Fireball basedir is {self.fb_dir}')
-        log.info(f'Scripts folder is {self.script_loc}')
 
         self.initUI()
         if self.dir_path != self.fb_dir:
@@ -458,8 +435,6 @@ class fbCollector(Frame):
         if localcfg.has_option('sharing','shrfldr'):
             self.share_loc = os.path.expanduser(localcfg['sharing']['shrfldr'].replace('$HOME','~')).replace('\\','/')
 
-        self.conda_exe = localcfg['Fireballs']['conda']
-        log.info(f'conda is {self.conda_exe}')
         return 
 
     def quitApplication(self):
@@ -557,6 +532,8 @@ class fbCollector(Frame):
         rawMenu.add_command(label="Get Live Images", command=self.getData)
         rawMenu.add_command(label="Get Videos", command=self.getVids)
         rawMenu.add_separator()
+        rawMenu.add_command(label="Refresh Images", command=self.findNewImages)
+        rawMenu.add_separator()
         rawMenu.add_command(label="Get ECSVs", command=self.getRequestedECSVs)
         rawMenu.add_command(label="Excl/Incl ECSV", command=self.ignoreCamera)
         rawMenu.add_command(label="Reduce Selected Image", command=self.reduceCamera, state=rmsavailable)
@@ -626,7 +603,7 @@ class fbCollector(Frame):
         self.scrollbar.config(command = self.listbox.yview)
 
         # bind delete key
-        self.listbox.bind("<Delete>", lambda x: self.remove_image())
+        self.listbox.bind("<Delete>", lambda x: self.removeImage())
 
         # IMAGE
         try:
@@ -680,6 +657,7 @@ class fbCollector(Frame):
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
         gotconda = 1
+        conda_exe = os.getenv('CONDA_EXE')
         with open(tmpscr, 'w') as outf:
             outf.write(f'cd {self.rms_loc}\n')
             if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
@@ -690,7 +668,7 @@ class fbCollector(Frame):
                 # initialse the conda shell
                 outf.write('eval "$(conda shell.bash hook)"\n')
             if gotconda: 
-                outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+                outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
             else:
                 outf.write(f'python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
         _ = subprocess.run([shellname, tmpscr])
@@ -709,7 +687,7 @@ class fbCollector(Frame):
                             # initialse the conda shell
                             outf.write('eval "$(conda shell.bash hook)"\n')
                         if gotconda: 
-                            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                            outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                         else:
                             outf.write(f'python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                     _ = subprocess.run([shellname, tmpscr])
@@ -1105,7 +1083,7 @@ class fbCollector(Frame):
         with open(checkedfile,'w') as outf:
             outf.write('\n'.join(alreadychecked))
 
-    def remove_image(self):
+    def removeImage(self):
         """ Remove the selected image from disk
         """
         current_image = self.listbox.get(ACTIVE)
@@ -1118,13 +1096,14 @@ class fbCollector(Frame):
         if self.review_stack:
             self.removeRelated(current_image)
         else:
+            os.makedirs(os.path.join(self.dir_path, 'skipped'), exist_ok=True)
             try:
-                os.remove(os.path.join(self.dir_path, 'jpgs', current_image))
+                shutil.move(os.path.join(self.dir_path, 'jpgs', current_image), os.path.join(self.dir_path, 'skipped', current_image) )
             except Exception:
                 pass
             xmlf = current_image.replace('P.jpg', '.xml')
             try:
-                os.remove(os.path.join(self.dir_path, 'jpgs', xmlf))
+                shutil.move(os.path.join(self.dir_path, 'jpgs', xmlf), os.path.join(self.dir_path, 'skipped', xmlf) )
             except Exception:
                 pass
             self.selected[current_image] = (0,'')
@@ -1161,6 +1140,60 @@ class fbCollector(Frame):
             self.imagelabel.image = None
             self.timestamp_label.configure(text = '')
             # FIXME
+        return 
+
+    def findNewImages(self):
+        fflist = []
+        dir_path = self.dir_path
+        for pth,_,ffnames in os.walk(dir_path):
+            for ffname in ffnames:
+                if 'FF_' in ffname and '.fits' in ffname:
+                    fflist.append(os.path.join(pth, ffname))
+        targdirs = []
+        newlist = []
+        for ff in fflist:
+            ffpath, ffname = os.path.split(ff)
+            if os.path.isfile(os.path.join(dir_path, 'jpgs', ffname.replace('.fits', '.jpg'))):
+                continue
+            if os.path.isfile(os.path.join(dir_path, 'skipped', ffname.replace('.fits', '.jpg'))):
+                continue
+            targdirs.append(ffpath)
+            newlist.append(ffname)
+        if len(targdirs) == 0:
+            log.info('no new images to refresh')
+            return 
+        # we have some folders to process
+        if platform.system() == 'Windows':    # Windows has to be awkward
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'tojpg.ps1')
+            shellname = 'powershell.exe'
+        else:
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'tojpg.sh')
+            shellname = 'bash'
+        gotconda = 1
+        conda_exe = os.getenv('CONDA_EXE')
+        with open(tmpscr, 'w') as outf:
+            outf.write(f'cd {self.rms_loc}\n')
+            # test if we have a python virtualenv in the standard Linux location
+            if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
+                outf.write('source ~/vRMS/bin/activate\n')
+                gotconda = 0
+            elif platform.system() != 'Windows':
+                # initialse the conda shell
+                outf.write('eval "$(conda shell.bash hook)"\n')
+            for targdir in targdirs:
+                    if gotconda: 
+                        outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.BatchFFtoImage {targdir} jpg\n')
+                    else:
+                        outf.write(f'python -m Utils.BatchFFtoImage {targdir} jpg\n')
+        _ = subprocess.run([shellname, tmpscr])
+        try:
+            os.remove(tmpscr)
+        except:
+            pass
+        for srcdir, srcfile in zip(targdirs, newlist):
+            jpgname = srcfile.replace('.fits', '.jpg')
+            shutil.copyfile(os.path.join(srcdir, jpgname), os.path.join(self.dir_path, 'jpgs', jpgname))
+        self.viewData()
         return 
 
     def clean_folder(self):

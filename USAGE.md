@@ -35,7 +35,9 @@ From the `File` menu, select `Open in Explorer`. You'll see there are a number o
 
 Copy the FF, FR, config and platepar files into the correct camera's folder and close the File Explorer window. If the camera isn't present, create a folder for it. 
 
-Select an image in the file list then select `Reduce Selected Image` from the `Raw` menu. If you've configured RMS correctly, SkyFit2 will launch. Once you're finished with SkyFit remember to press Ctrl-S before quitting, to save the analysis as an ECSV file. 
+Now select `Refresh Images` from the `Raw` menu, and after a moment you should see the new file appear in the file selector. Select the image then select `Reduce Selected Image` from the `Raw` menu. If you've configured RMS correctly, SkyFit2 will launch. 
+
+Once you're finished with SkyFit remember to press Ctrl-S before quitting to save the analysis as an ECSV file. 
 
 ### Solving from ECSVs
 * Once you have at least two ECSVs (either from SkyFit2 or from the UKMON archive), you can click `Solve` from the `Solve` menu. This will invoke WMPL which will read the ECSVs and attempt to find a trajectory. It may take some time. 

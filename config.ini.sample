@@ -4,7 +4,6 @@
 [Fireballs]
 # the location to which fireball data will be downloaded eg c:\fireballs.
 basedir=
-conda= 
 
 [reduction]
 # To use the reduction options RMS must be installed and an RMS python environment created 
