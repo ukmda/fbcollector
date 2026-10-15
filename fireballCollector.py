@@ -539,7 +539,7 @@ class fbCollector(Frame):
             shareavailable = 'active'
         else:
             shareavailable = 'disabled'
-        if self.gmn_key:
+        if self.gmn_key and self.gmn_user and self.gmn_server:
             gmnavailable ='active' 
         else:
             gmnavailable ='disabled' 
