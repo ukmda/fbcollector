@@ -24,7 +24,7 @@ eval "$(conda shell.bash hook)"
 
 if [ $gotconda -eq 1 ] ; then
     if [ $gotenv -eq 0 ] ; then echo "creating conda environment" ; conda create -y -n $fbenv python=3.12 ; fi
-	if [ $envactive -eq 0 ] ; then echo "activating env" ; conda activate $fbenv ; fi
+	[ $envactive -eq 0 ] && conda activate $fbenv 
     echo $CONDA_DEFAULT_ENV
 	pip install -r $here/requirements.txt
     cp $here/config.ini.sample $here/config.ini
@@ -80,6 +80,7 @@ while [ "$wmplloc" == "nowhere" ] ; do
         rm -Rf wmpl/CAMO
         rm -f wmpl/Utils/DynamicMassFit.py
         python ./UpdateOrbitFiles.py
+        echo "getting DE430 Planetary Ephemerides Kernel"
         curl "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de430.bsp" -o $wmplloc/wmpl/share/de430.bsp
         python -c "from wmpl.Utils.ShowerAssociation import loadGMNShowerTable"
         popd

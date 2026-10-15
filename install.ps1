@@ -86,6 +86,7 @@ while ($wmplloc -eq "nowhere" ) {
         Remove-Item -Recurse wmpl/CAMO
         Remove-Item wmpl/Utils/DynamicMassFit.py
         python ./UpdateOrbitFiles.py
+        echo "getting DE430 Planetary Ephemerides Kernel"
         curl "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de430.bsp" -o $wmplloc/wmpl/share/de430.bsp
         python -c "from wmpl.Utils.ShowerAssociation import loadGMNShowerTable"
         popd

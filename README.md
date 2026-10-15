@@ -36,7 +36,7 @@ The installation process will search for an existing WMPL installation. If not f
 During installation you will be prompted for the location of RMS. If you've not installed it yet, just it enter but remember you'll need RMS installed if you want to manually reduce raw FF or FR files. Installing RMS is explained in its [README](https://github.com/CroatianMeteorNetwork/RMS/blob/master/README.md) file.
 
 ## Completing Installation and running the App
-Once the installer is finished, you can run the app by opening an Anaconda Powershell prompt or Linux shell a then run `~/src/fbcollector/fbcollector.ps1` or `~/src/fbcollector/fbcollector.sh` as appropriate for your OS. There are further instructions in the [USAGE](USAGE.md) file. 
+Once the installer is finished, you can run the app by opening an Anaconda Powershell prompt or Linux shell a then run `~/src/fbcollector/fbcollector.ps1` or `~/src/fbcollector/fbcollector.sh` as appropriate for your OS (assuming you installed in `~/src/fbcollector` as suggested earlier). There are further instructions in the [USAGE](USAGE.md) file. 
 
 
 ## UKMON API and GMN Coordinators keys
