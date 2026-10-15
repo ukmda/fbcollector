@@ -66,7 +66,7 @@ class scpconn():
 
     def getEventFileByStation(self, stationid, eventdt, basedir, skipfile, skipsftp=False):
         locpath = os.path.join(basedir, eventdt, f'{stationid.upper()}_{eventdt}_event.tar.bz2')
-        alreadychecked = [x.strip() for x in open(skipfile, 'r').readlines()]
+        alreadychecked = [x.strip() for x in open(skipfile, 'r').readlines()] if os.path.isfile(skipfile) else []
         if stationid.upper() in alreadychecked:
             log.info(f'skipping {stationid} as marked already-checked')
             return 
@@ -122,9 +122,6 @@ class scpconn():
 
         for ctry in ctrylist:
             self.getEventsByCountry(ctry, eventdt, basedir, skipfile, skipsftp)
-
-
-
 
 
 if __name__ == '__main__':

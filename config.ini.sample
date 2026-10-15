@@ -4,16 +4,16 @@
 [Fireballs]
 # the location to which fireball data will be downloaded eg c:\fireballs.
 basedir=
+conda= 
 
 [reduction]
-# To use the reduction options RMS must be installed and an RMS python conda environment created 
+# To use the reduction options RMS must be installed and an RMS python environment created 
 rms_loc=
 rms_env=RMS
 
 [solver]
-# To use the solver options WMPL must be installed and a WMPL python conda environment created 
+# To use the solver options WMPL must be installed
 wmpl_loc=
-wmpl_env=wmpl
 
 [sharing]
 # create a folder in Dropbox or similar if you want to share raw data with others and then put 

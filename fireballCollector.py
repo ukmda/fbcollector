@@ -37,8 +37,9 @@ from PIL import ImageTk
 from gmnCollector import scpconn
 
 
-appversion = "2026.9.0"
+appversion = "2026.10.0"
 
+dir_  = ''
 config_file = ''
 noimg_file = ''
 global_bg = "Black"
@@ -94,10 +95,18 @@ def getSummaryText(txtfile):
     return '\n'.join(res)
 
 
-def loadConfig():
+def updateConfigEntry(section, key, value, cfg_file=None):
+    localcfg = loadConfig(cfg_file)
+    value = value.replace('\\', '/')
+    localcfg[section][key] = value
+    saveConfig(localcfg, cfg_file)
+
+def loadConfig(cfg_file=None):
+    if cfg_file is None:
+        cfg_file = config_file
     localcfg = configparser.ConfigParser()
-    localcfg.read(config_file)
-    if 'conda' not in localcfg['Fireballs']:
+    localcfg.read(cfg_file)
+    if 'conda' not in localcfg['Fireballs'] or localcfg['Fireballs']['conda'] == '':
         conda_exe = os.getenv('CONDA_EXE')
         if conda_exe is None: 
             if platform.system() == 'Windows':    # Windows has to be awkward
@@ -107,11 +116,14 @@ def loadConfig():
         if conda_exe is None: 
             conda_exe = ''
         localcfg['Fireballs']['conda'] = conda_exe
+        saveConfig(localcfg, cfg_file)
     return localcfg
 
 
-def saveConfig(cfgdata):
-    with open(config_file,'w') as outf:
+def saveConfig(cfgdata, cfg_file=None):
+    if cfg_file is None:
+        cfg_file = config_file
+    with open(cfg_file,'w') as outf:
         cfgdata.write(outf)
     return 
 
@@ -160,9 +172,6 @@ class cfgDialog(Dialog):
         self.wmplloc_label = tk.Label(frame, width=25, text="Location", anchor='w')
         self.wmplloc_box = tk.Entry(frame, width=50)
         self.wmplloc_box.insert(tk.END, self.cfgdata['solver']['wmpl_loc'])
-        self.wmplenv_label = tk.Label(frame, width=25, text="Python Env Name", anchor='w')
-        self.wmplenv_box = tk.Entry(frame, width=50)
-        self.wmplenv_box.insert(tk.END, self.cfgdata['solver']['wmpl_env'])
 
         # sharing
         self.share_label = tk.Label(frame, width=25, text="Optional Sharing", anchor='w')
@@ -203,10 +212,8 @@ class cfgDialog(Dialog):
         self.rmsloc_box.grid(column=1, row=3)
 
         self.wmpl_label.grid(column=0, row=4)
-        self.wmplenv_label.grid(column=0, row=5)
-        self.wmplenv_box.grid(column=1, row=5)
-        self.wmplloc_label.grid(column=0, row=6)
-        self.wmplloc_box.grid(column=1, row=6)
+        self.wmplloc_label.grid(column=0, row=5)
+        self.wmplloc_box.grid(column=1, row=5)
 
         self.share_label.grid(column=0, row=7)
         self.shareloc_label.grid(column=0, row=8)
@@ -230,22 +237,31 @@ class cfgDialog(Dialog):
         return
 
     def ok_pressed(self):
-        self.cfgdata['Fireballs']['basedir'] = self.basedir_box.get().strip()
-        self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
-        self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
-        self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
-        self.cfgdata['solver']['wmpl_env'] = self.wmplenv_box.get().strip()
-        self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
-        self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
-        self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
-        self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
-        self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
-        self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
-        saveConfig(self.cfgdata)
-        self.destroy()
+        basedir = self.basedir_box.get().strip()
+        if basedir == '' or basedir is None:
+            tkMessageBox.showinfo('Warning', 'Must set at least base dir')
+        else:
+            self.cfgdata['Fireballs']['basedir'] = basedir
+            self.cfgdata['reduction']['rms_loc'] = self.rmsloc_box.get().strip()
+            self.cfgdata['reduction']['rms_env'] = self.rmsenv_box.get().strip()
+            self.cfgdata['solver']['wmpl_loc'] = self.wmplloc_box.get().strip()
+            self.cfgdata['sharing']['shrfldr'] = self.shareloc_box.get().strip()
+            self.cfgdata['gmn']['gmnkey'] = self.gmnkey_box.get().strip()
+            self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
+            self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
+            self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
+            self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
+            saveConfig(self.cfgdata)
+            self.destroy()
+            self.status = True
 
     def cancel_pressed(self):
-        self.destroy()
+        basedir = self.basedir_box.get().strip()
+        if basedir == '' or basedir is None:
+            tkMessageBox.showinfo('Warning', 'Must set at least base dir')
+        else:
+            self.destroy()
+            self.status = False
 
     def buttonbox(self):
         self.ok_button = tk.Button(self, text='OK', width=5, command=self.ok_pressed)
@@ -298,13 +314,16 @@ def getECSVs(stationID, dateStr, outdir='.'):
 
 def _download(url, outdir, fname=None):
     get_response = requests.get(url, stream=True)
-    if fname is None:
-        fname = url.split('?')[0].split("/")[-1]
-    with open(os.path.join(outdir, fname), 'wb') as f:
-        for chunk in get_response.iter_content(chunk_size=4096):
-            if chunk: # filter out keep-alive new chunks
-                f.write(chunk)
-    return fname
+    if get_response.status_code == 200:
+        if fname is None:
+            fname = url.split('?')[0].split("/")[-1]
+        with open(os.path.join(outdir, fname), 'wb') as f:
+            for chunk in get_response.iter_content(chunk_size=4096):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+        return fname
+    else:
+        return None
 
 
 def getLiveJpgs(dtstr, outdir=None):
@@ -329,9 +348,12 @@ def getLiveJpgs(dtstr, outdir=None):
         try:
             jpgurl = thisimg.urls['url']
             fname = _download(jpgurl, outdir)
-            log.info(f'retrieved {fname}')
+            if fname:
+                log.info(f'retrieved {fname}')
+            else:
+                log.warning(f'image {thisimg.urls["imgtitle"]} unavailable')
         except:
-            log.warning(f'{img.image_name} unavailable')
+            log.warning(f'image {thisimg.urls["imgtitle"]} unavailable')
 
 
 class fbCollector(Frame):
@@ -351,7 +373,6 @@ class fbCollector(Frame):
         self.gmn_user = ''
         self.gmn_server = ''
         self.wmpl_loc = ''
-        self.wmpl_env = ''
         self.rms_loc = ''
         self.rms_env = ''
         self.api_key = None
@@ -363,15 +384,18 @@ class fbCollector(Frame):
         self.log_files_to_keep = 30
         self.script_loc = os.path.split(config_file)[0]
         self.conda_exe = ''
+        self.patt = ''
+        self.firstpass = True
 
         self.readConfig()
 
+        self.firstpass = False
         self.patt = patt
         if patt is None:
             self.dir_path = self.fb_dir.strip()
         else:
             self.dir_path = os.path.join(self.fb_dir, patt)
-        log.info(f'Fireball folder is {self.fb_dir}')
+        log.info(f'Fireball basedir is {self.fb_dir}')
         log.info(f'Scripts folder is {self.script_loc}')
 
         self.initUI()
@@ -388,9 +412,16 @@ class fbCollector(Frame):
         return 
 
     def readConfig(self):
+        if not os.path.isfile(config_file):
+            shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
+            self.reviewConfig()
 
         localcfg = loadConfig()
+        self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
+        if self.fb_dir is None or self.fb_dir == '':
+            self.reviewConfig()
 
+        localcfg = loadConfig()
         self.fb_dir = os.path.expanduser(localcfg['Fireballs']['basedir'].replace('$HOME','~')).replace('\\','/')
         self.basedir = self.fb_dir
         os.makedirs(self.fb_dir, exist_ok=True)
@@ -417,7 +448,6 @@ class fbCollector(Frame):
         self.wmpl_loc = None
         if localcfg.has_option('solver','wmpl_loc'):
             self.wmpl_loc = os.path.expanduser(localcfg['solver']['wmpl_loc'].replace('$HOME','~')).replace('\\','/')
-            self.wmpl_env= localcfg['solver']['wmpl_env']
 
         self.rms_loc = None
         if localcfg.has_option('reduction','rms_loc'):
@@ -518,10 +548,10 @@ class fbCollector(Frame):
         else:
             wmplavailable = 'disabled'
 
-        log.info(f'rms available   {rmsavailable}')
-        log.info(f'share available {shareavailable}')
-        log.info(f'gmn available   {gmnavailable}')
-        log.info(f'wmpl available  {wmplavailable}')
+        log.info(f'rms   {rmsavailable}')
+        log.info(f'share {shareavailable}')
+        log.info(f'gmn   {gmnavailable}')
+        log.info(f'wmpl  {wmplavailable}')
 
         rawMenu = Menu(self.menuBar, tearoff=0)
         rawMenu.add_command(label="Get Live Images", command=self.getData)
@@ -617,13 +647,14 @@ class fbCollector(Frame):
         log.info('initUI completed')
 
     def reviewConfig(self):
-        _ = cfgDialog(self)
-        log.info('done editing config')
+        res = cfgDialog(self)
         self.readConfig()
-        self.initUI()
+        if not self.firstpass:
+            self.initUI()
+            self.viewData()
 
     def showDocs(self):
-        webbrowser.open('README.html')
+        webbrowser.open('USAGE.html')
         return 
 
     def reduceCamera(self):
@@ -648,22 +679,39 @@ class fbCollector(Frame):
         else:
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
+        gotconda = 1
         with open(tmpscr, 'w') as outf:
             outf.write(f'cd {self.rms_loc}\n')
-            if platform.system() != 'Windows':    # Windows has to be awkward
+            if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
+                # test if we have a python virtualenv in the standard Linux location
+                outf.write('source ~/vRMS/bin/activate\n')
+                gotconda = 0
+            elif platform.system() != 'Windows':
+                # initialse the conda shell
                 outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
-
+            if gotconda: 
+                outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+            else:
+                outf.write(f'python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
         _ = subprocess.run([shellname, tmpscr])
+
         frs = glob.glob(os.path.join(dirname, 'FR*.bin'))
         if len(frs) > 0:
             if tkMessageBox.askyesno("Rerun", f'{len(frs)} FR files detected - rerun?'):
                 for fr in frs:
                     with open(tmpscr, 'w') as outf:
                         outf.write(f'cd {self.rms_loc}\n')
-                        if platform.system() != 'Windows':    # Windows has to be awkward
+                        if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
+                            # test if we have a python virtualenv in the standard Linux location
+                            outf.write('source ~/vRMS/bin/activate\n')
+                            gotconda = 0
+                        elif platform.system() != 'Windows':
+                            # initialse the conda shell
                             outf.write('eval "$(conda shell.bash hook)"\n')
-                        outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                        if gotconda: 
+                            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                        else:
+                            outf.write(f'python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                     _ = subprocess.run([shellname, tmpscr])
         try:
             os.remove(tmpscr)
@@ -776,6 +824,18 @@ class fbCollector(Frame):
         return 
     
     def createGraphs(self):
+        self.statusbox.configure(text = "Creating graphs....")
+        if self.wmpl_loc not in sys.path:
+            sys.path.insert(0, self.wmpl_loc)
+        try:
+            from wmpl.Utils.Pickling import loadPickle
+            from wmpl.Utils.TrajConversions import jd2Date
+        except Exception as e:
+            log.warning('wmpl not available')
+            log.warning(e)
+            self.statusbox.configure(text = "WMPL unavailable, can't update charts")
+            return
+
         pickles=[]
         for path, _, files in os.walk(self.dir_path):
             for name in files:
@@ -793,31 +853,17 @@ class fbCollector(Frame):
         if not pickfile:
             return False
 
+        pickdir, pickfile = os.path.split(pickfile)
+        traj=loadPickle(pickdir, pickfile)
+        dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")
+        outdir=os.path.join(self.dir_path, dir_name)
         tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
-        with open(tmppy, 'w') as outf:
-            pickdir, pickfile = os.path.split(pickfile)
-            outf.write('from wmpl.Utils.Pickling import loadPickle\nimport os\n')
-            outf.write('from wmpl.Utils.TrajConversions import jd2Date\n')
-            outf.write(f"traj=loadPickle('{pickdir}', '{pickfile}')\n")
-            outf.write('dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")\n')
-            outf.write(f"outdir=os.path.join('{self.dir_path}', dir_name)\n")
-            outf.write('traj.savePlots(outdir,traj.file_name, show_plots=False)\n')
-        if platform.system() == 'Windows':    # Windows has to be awkward            
-            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.ps1')
-            shellname = 'powershell.exe'
-        else:
-            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.sh')
-            shellname = 'bash'
-        with open(tmpscr, 'w') as outf:
-            if platform.system() != 'Windows':
-                outf.write('eval "$(conda shell.bash hook)"\n')
-            outf.write(f'conda run -n {self.wmpl_env} python {tmppy}\n')
-        _ = subprocess.run([shellname, tmpscr])
-        os.remove(tmpscr)
-        os.remove(tmppy)
+        traj.savePlots(outdir, traj.file_name, show_plots=False)
+        self.statusbox.configure(text = "Done")
         return True
     
     def viewSolution(self):
+        self.statusbox.configure(text = "Viewing Solution")
         self.review_stack = False
         if not self.soln_outputdir:
             solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
@@ -879,18 +925,14 @@ class fbCollector(Frame):
         return 
     
     def getRequestedECSVs(self):
-        notgotlist=[]
         img_list = self.get_bin_list()
         numecsvs = 0
         for current_image in img_list:
             if not self.getOneEcsv(current_image):
-                notgotlist.append(current_image)
+                log.info(f' no ecsv for {current_image}')
             else:
                 numecsvs += 1
-        if len(notgotlist) > 0: 
-            tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs\nNo ECSVs for {notgotlist}')
-        else:
-            tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
+        tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
         return
     
     def getOneEcsv(self, current_image):
@@ -1122,6 +1164,8 @@ class fbCollector(Frame):
         return 
 
     def clean_folder(self):
+        if not os.path.isdir(os.path.join(self.dir_path, 'stacks')):
+            return 
         stacklist = os.listdir(os.path.join(self.dir_path, 'stacks'))
         camlist = [x[:6] for x in stacklist if 'stack.jpg' in x]
 
@@ -1444,7 +1488,9 @@ def uploadOrbitGeneric(orbdir, api_key):
     except Exception:
         pass
 
-    if api_key: 
+    zipsizemb = os.path.getsize(f'{zfname}.zip')/1024/1024
+    
+    if api_key and zipsizemb < 10.0: 
         headers = {'Content-type': 'application/zip', 'Slug': orbname[:15], 'apikey': api_key}
         url = f'https://api.ukmeteors.co.uk/fireballfiles?orbitfile={orbname[:15]}.zip'
         r = requests.put(url, data=open(zfname+'.zip', 'rb'), headers=headers) #, auth=('username', 'pass'))
@@ -1454,7 +1500,7 @@ def uploadOrbitGeneric(orbdir, api_key):
             tkMessageBox.showinfo('Info', 'Orbit Uploaded')
         return 
     else:
-        tkMessageBox.showinfo('Info', 'Zip File created')
+        tkMessageBox.showinfo('Info', 'Zip File created, please upload to a filesharing site\nthen send a link to fireballs@ukmeteornetwork.org')
     
 
 
@@ -1474,7 +1520,6 @@ def setupLogging(logdir):
 
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s: %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
     ch.setFormatter(formatter)
     log.addHandler(ch)
 
@@ -1492,9 +1537,6 @@ if __name__ == '__main__':
     else:
         dir_ = os.getcwd()
         config_file = os.path.join(dir_, 'config.ini')
-    if not os.path.isfile(config_file):
-        shutil.copyfile(os.path.join(dir_, 'config.ini.sample'), config_file)
-        tkMessageBox.showinfo("Config Missing", 'Please configure before using')
 
     noimg_file = os.path.join(dir_, 'noimage.jpg')
 
