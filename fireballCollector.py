@@ -1164,6 +1164,8 @@ class fbCollector(Frame):
         return 
 
     def clean_folder(self):
+        if not os.path.isdir(os.path.join(self.dir_path, 'stacks')):
+            return 
         stacklist = os.listdir(os.path.join(self.dir_path, 'stacks'))
         camlist = [x[:6] for x in stacklist if 'stack.jpg' in x]
 
