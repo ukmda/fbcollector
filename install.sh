@@ -1,9 +1,8 @@
 #!/bin/bash
 #
-# powershell script to install the Fireball Collector
+# Bash script to install the Fireball Collector
 # copyright Mark McIntyre, 2026-
 
-# NB: this script must be run in an Anaconda Powershell prompt
 # See the README for more.
 
 here="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"

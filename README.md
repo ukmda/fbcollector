@@ -22,7 +22,8 @@ The following are optional. See "UKMON API and GMN Coordinators keys" below for 
 * Download `setup_fbcollector.zip` file from [here](https://github.com/ukmda/fbcollector/releases)
 * Unzip the contents to a folder of your choice. I recommend `$HOME/src/fbcollector`.
 * Open an Anaconda Powershell Prompt or Linux Terminal window and change directory to the folder you unzipped the files into.
-* run `.\install.ps1` (for windows) or `./install.sh` (for Linux/MacOS)
+* On Windows, type `.\install.ps1` to launch the installer.
+* On other operating systems type `chmod +x *.sh && ./install.sh` 
 
 This will create a Conda environment and install the dependencies, then prompt you for various configuration items.
 
