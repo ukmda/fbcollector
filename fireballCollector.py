@@ -18,6 +18,8 @@ from PIL import Image
 import requests
 import pandas as pd
 import webbrowser
+import zipfile
+import tempfile
 
 import paramiko
 from scp import SCPClient
@@ -576,6 +578,9 @@ class fbCollector(Frame):
 
         helpMenu = Menu(self.menuBar, tearoff=0)
         helpMenu.add_command(label="Documentation", command=self.showDocs)
+        otherMenu.add_separator()
+        helpMenu.add_command(label="Check for Updates", command=self.checkForUpdates)
+        helpMenu.add_command(label="About", command=self.aboutBox)
         self.menuBar.add_cascade(label="Help", underline=0, menu=helpMenu)
         # buttons
         self.save_panel = LabelFrame(self, text=' Image Selection ')
@@ -623,6 +628,10 @@ class fbCollector(Frame):
         self.timestamp_label.grid(row = 7, column = 3, sticky = "E")
         log.info('initUI completed')
 
+    def aboutBox(self):
+        tkMessageBox.showinfo('About', f'UKMON Fireball Collector and Analyser version {appversion}\n'\
+                            'All rights Reserved, Mark McIntyre/UKMON')
+
     def reviewConfig(self):
         res = cfgDialog(self)
         self.readConfig()
@@ -632,6 +641,50 @@ class fbCollector(Frame):
 
     def showDocs(self):
         webbrowser.open('USAGE.html')
+        return 
+
+    def checkForUpdates(self):
+        res = requests.get('https://api.github.com/repos/ukmda/fbcollector/releases/latest')
+        if res.status_code != 200:
+            tkMessageBox.showwarning("Warning", "Unable to check github, check your internet connection")
+            return 
+
+        jsondata = res.json()
+        latest_release = jsondata['name']
+        if latest_release == appversion:
+            tkMessageBox.showinfo("Upgrade", f"You're already on the latest release ({appversion})")
+            return 
+
+        if tkMessageBox.askyesno("Upgrade", f'Version {latest_release} is available - do you want to upgrade?'):
+            zipname = f'https://github.com/ukmda/fbcollector/releases/download/{latest_release}/fireball_collector.zip'
+            get_response = requests.get(zipname, stream=True)
+            if get_response.status_code == 200:
+                log.info(f'retrieved {latest_release}')
+                upgrfile = os.path.join(os.getenv('TMP', default='/tmp'), f'fbcollector-{latest_release}.zip')
+                with open(os.path.join(self.dir_path, upgrfile), 'wb') as f:
+                    for chunk in get_response.iter_content(chunk_size=4096):
+                        if chunk: # filter out keep-alive new chunks
+                            f.write(chunk)
+                zf = zipfile.ZipFile(upgrfile)
+                with tempfile.TemporaryDirectory() as tempdir:
+                    zf.extractall(tempdir)
+                    flist = os.listdir(tempdir)
+                    appdir = os.path.dirname(__file__)
+                    for fl in flist:
+                        log.info(f'{tempdir} {fl}')
+                        srcfile = os.path.join(tempdir, fl)
+                        targfile = os.path.join(appdir, fl)
+                        shutil.copyfile(srcfile, targfile)
+                        if srcfile.endswith('.sh') and platform.system() !='Windows':
+                            try:
+                                os.chmod(targfile, 0o755)
+                                pass
+                            except Exception as e:
+                                pass
+                tkMessageBox.showinfo('Done','Upgrade complete, now restart the app')
+        else:
+            log.warning('unable to get upgrade package')
+            tkMessageBox.showwarning("Warning", "Unable to get upgrade, check your internet connection")
         return 
 
     def reduceCamera(self):

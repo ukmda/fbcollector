@@ -43,16 +43,6 @@ jobs:
           command: 'dos2unix *.sh'
           filename: 'fireball_collector.zip'
           exclusions: '*.git* *.vscode* __pycache__ /.vscode .gitignore *.md *.yaml *.spec *.iss *.toml tests  /.pytest*'
-      #  run: |
-      #    echo "running build step"
-      #    pip install -r requirements.txt
-      #    pip install pyinstaller
-      #    pyinstaller ./fireballCollector.py --onefile --windowed --icon .\ukmda.ico --additional-hooks-dir=. 
-      #    
-      #- name: packaging
-      #  uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-      #  with:
-      #    path: .\fireballcollector_setup.iss
   release_fbtool:
     name: release fbcollector
     runs-on: windows-latest
