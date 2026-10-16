@@ -820,6 +820,8 @@ class fbCollector(Frame):
         outdir=os.path.join(self.dir_path, dir_name)
         tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
         traj.show_jacchia = True
+        if not hasattr(traj, 'enable_OSM_plot'):
+            traj.enable_OSM_plot = True
         traj.savePlots(outdir, traj.file_name, show_plots=False)
         self.statusbox.configure(text = "Done")
         return True
