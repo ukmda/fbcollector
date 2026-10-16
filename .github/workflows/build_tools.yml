@@ -28,6 +28,7 @@ jobs:
     name: build fbcollector
     runs-on: windows-latest
     needs: local_tests
+    if: github.ref != 'refs/heads/master'
     steps:
       - name: "checkout repository"
         uses: actions/checkout@v7
@@ -49,6 +50,20 @@ jobs:
     needs: [local_tests, build_fbtool]
     if: github.ref == 'refs/heads/master'
     steps: 
+      - name: checkout
+        uses: actions/checkout@v7
+      - name: make help
+        run: |
+          pip install markdown2
+          markdown2 ./USAGE.md > USAGE.html
+          markdown2 ./README.md > README.html
+      - name: repackage
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: 'zip'
+          command: 'dos2unix *.sh'
+          filename: 'fireball_collector.zip'
+          exclusions: '*.git* *.vscode* __pycache__ /.vscode .gitignore *.md *.yaml *.spec *.iss *.toml tests  /.pytest*'
       - name: release
         uses: xresloader/upload-to-github-release@v1
         env:
