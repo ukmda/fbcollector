@@ -53,6 +53,12 @@ jobs:
       #  uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       #  with:
       #    path: .\fireballcollector_setup.iss
+  release_fbtool:
+    name: release fbcollector
+    runs-on: windows-latest
+    needs: [local_tests, build_fbtool]
+    if: github.ref == 'refs/heads/master'
+    steps: 
       - name: release
         uses: xresloader/upload-to-github-release@v1
         env:
@@ -60,8 +66,5 @@ jobs:
         with:
           file: .\fireball_collector.zip
           tags: true
-          #draft: true
           overwrite: true
           tag_name: 2026.10.0
-          # default_release_name: Tool to Gather Fireball data 
-          # default_release_body_path: ./release_notes.txt
