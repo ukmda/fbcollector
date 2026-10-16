@@ -24,7 +24,7 @@ The tool can retrieve images from the UKMON livestream up for to a month in the 
   
 * Go through the image list and press the `Delete` key to delete any that you are not interested in. 
 
-* Once you've whittled the list down to just the interesting events, you can select `Get ECSVs` from the `Raw` menu. This will attempt to get raw meteor track data for each image in [ECSV](https://docs.astropy.org/en/stable/api/astropy.io.ascii.Ecsv.html) format. 
+* Once you've whittled the list down to just the interesting events, you can select `Get ECSVs` from the `Raw` menu. This will attempt to get raw meteor track data for each image in [ECSV](https://docs.astropy.org/en/stable/api/astropy.io.ascii.Ecsv.html) format. Files with ECSVs will be highlighted in green.
   
 * You can also click `Get Videos` to collect any video data thats available. 
 
@@ -35,7 +35,9 @@ From the `File` menu, select `Open in Explorer`. You'll see there are a number o
 
 Copy the FF, FR, config and platepar files into the correct camera's folder and close the File Explorer window. If the camera isn't present, create a folder for it. 
 
-Select an image in the file list then select `Reduce Selected Image` from the `Raw` menu. If you've configured RMS correctly, SkyFit2 will launch. Once you're finished with SkyFit remember to press Ctrl-S before quitting, to save the analysis as an ECSV file. 
+Now select `Refresh Images` from the `Raw` menu, and after a moment you should see the new file appear in the file selector. Select the image then select `Reduce Selected Image` from the `Raw` menu. If you've configured RMS correctly, SkyFit2 will launch. 
+
+Once you're finished with SkyFit remember to press Ctrl-S before quitting to save the analysis as an ECSV file. 
 
 ### Solving from ECSVs
 * Once you have at least two ECSVs (either from SkyFit2 or from the UKMON archive), you can click `Solve` from the `Solve` menu. This will invoke WMPL which will read the ECSVs and attempt to find a trajectory. It may take some time. 

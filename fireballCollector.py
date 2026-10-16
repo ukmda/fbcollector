@@ -18,6 +18,8 @@ from PIL import Image
 import requests
 import pandas as pd
 import webbrowser
+import zipfile
+import tempfile
 
 import paramiko
 from scp import SCPClient
@@ -37,7 +39,7 @@ from PIL import ImageTk
 from gmnCollector import scpconn
 
 
-appversion = "2026.10.0"
+appversion = "2026.10.1"
 
 dir_  = ''
 config_file = ''
@@ -106,17 +108,6 @@ def loadConfig(cfg_file=None):
         cfg_file = config_file
     localcfg = configparser.ConfigParser()
     localcfg.read(cfg_file)
-    if 'conda' not in localcfg['Fireballs'] or localcfg['Fireballs']['conda'] == '':
-        conda_exe = os.getenv('CONDA_EXE')
-        if conda_exe is None: 
-            if platform.system() == 'Windows':    # Windows has to be awkward
-                conda_exe = os.path.expanduser('~/miniconda3/Scripts/conda.exe')
-            else:
-                conda_exe = os.path.expanduser('~/miniconda3/bin/conda')            
-        if conda_exe is None: 
-            conda_exe = ''
-        localcfg['Fireballs']['conda'] = conda_exe
-        saveConfig(localcfg, cfg_file)
     return localcfg
 
 
@@ -197,11 +188,6 @@ class cfgDialog(Dialog):
         self.ukmonapikey_box = tk.Entry(frame, width=50)
         self.ukmonapikey_box.insert(tk.END, self.cfgdata['ukmon']['apikey'])
 
-        # conda location
-        self.conda_label = tk.Label(frame, width=25, text="Conda Location", anchor='w')
-        self.conda_box = tk.Entry(frame, width=50)
-        self.conda_box.insert(tk.END, self.cfgdata['Fireballs']['conda'])
-
         # now put into grid
         self.basedir_label.grid(column=0, row=0)
         self.basedir_box.grid(column=1, row=0)
@@ -231,9 +217,6 @@ class cfgDialog(Dialog):
         self.ukmonapikey_label.grid(column=0, row=14)
         self.ukmonapikey_box.grid(column=1, row=14)
 
-        self.conda_label.grid(column=0, row=16)
-        self.conda_box.grid(column=1, row=16)
-
         return
 
     def ok_pressed(self):
@@ -250,7 +233,6 @@ class cfgDialog(Dialog):
             self.cfgdata['gmn']['gmnserver'] = self.gmnserver_box.get().strip()
             self.cfgdata['gmn']['gmnuser'] = self.gmnuser_box.get().strip()
             self.cfgdata['ukmon']['apikey'] = self.ukmonapikey_box.get().strip()
-            self.cfgdata['Fireballs']['conda'] = self.conda_box.get().strip()
             saveConfig(self.cfgdata)
             self.destroy()
             self.status = True
@@ -382,8 +364,6 @@ class fbCollector(Frame):
         self.review_stack = False
         self.soln_outputdir = None
         self.log_files_to_keep = 30
-        self.script_loc = os.path.split(config_file)[0]
-        self.conda_exe = ''
         self.patt = ''
         self.firstpass = True
 
@@ -396,7 +376,6 @@ class fbCollector(Frame):
         else:
             self.dir_path = os.path.join(self.fb_dir, patt)
         log.info(f'Fireball basedir is {self.fb_dir}')
-        log.info(f'Scripts folder is {self.script_loc}')
 
         self.initUI()
         if self.dir_path != self.fb_dir:
@@ -458,8 +437,6 @@ class fbCollector(Frame):
         if localcfg.has_option('sharing','shrfldr'):
             self.share_loc = os.path.expanduser(localcfg['sharing']['shrfldr'].replace('$HOME','~')).replace('\\','/')
 
-        self.conda_exe = localcfg['Fireballs']['conda']
-        log.info(f'conda is {self.conda_exe}')
         return 
 
     def quitApplication(self):
@@ -539,7 +516,7 @@ class fbCollector(Frame):
             shareavailable = 'active'
         else:
             shareavailable = 'disabled'
-        if self.gmn_key:
+        if self.gmn_key and self.gmn_user and self.gmn_server:
             gmnavailable ='active' 
         else:
             gmnavailable ='disabled' 
@@ -556,6 +533,8 @@ class fbCollector(Frame):
         rawMenu = Menu(self.menuBar, tearoff=0)
         rawMenu.add_command(label="Get Live Images", command=self.getData)
         rawMenu.add_command(label="Get Videos", command=self.getVids)
+        rawMenu.add_separator()
+        rawMenu.add_command(label="Refresh Images", command=self.findNewImages)
         rawMenu.add_separator()
         rawMenu.add_command(label="Get ECSVs", command=self.getRequestedECSVs)
         rawMenu.add_command(label="Excl/Incl ECSV", command=self.ignoreCamera)
@@ -599,6 +578,9 @@ class fbCollector(Frame):
 
         helpMenu = Menu(self.menuBar, tearoff=0)
         helpMenu.add_command(label="Documentation", command=self.showDocs)
+        otherMenu.add_separator()
+        helpMenu.add_command(label="Check for Updates", command=self.checkForUpdates)
+        helpMenu.add_command(label="About", command=self.aboutBox)
         self.menuBar.add_cascade(label="Help", underline=0, menu=helpMenu)
         # buttons
         self.save_panel = LabelFrame(self, text=' Image Selection ')
@@ -626,7 +608,7 @@ class fbCollector(Frame):
         self.scrollbar.config(command = self.listbox.yview)
 
         # bind delete key
-        self.listbox.bind("<Delete>", lambda x: self.remove_image())
+        self.listbox.bind("<Delete>", lambda x: self.removeImage())
 
         # IMAGE
         try:
@@ -646,6 +628,10 @@ class fbCollector(Frame):
         self.timestamp_label.grid(row = 7, column = 3, sticky = "E")
         log.info('initUI completed')
 
+    def aboutBox(self):
+        tkMessageBox.showinfo('About', f'UKMON Fireball Collector and Analyser version {appversion}\n'\
+                            'All rights Reserved, Mark McIntyre/UKMON')
+
     def reviewConfig(self):
         res = cfgDialog(self)
         self.readConfig()
@@ -655,6 +641,50 @@ class fbCollector(Frame):
 
     def showDocs(self):
         webbrowser.open('USAGE.html')
+        return 
+
+    def checkForUpdates(self):
+        res = requests.get('https://api.github.com/repos/ukmda/fbcollector/releases/latest')
+        if res.status_code != 200:
+            tkMessageBox.showwarning("Warning", "Unable to check github, check your internet connection")
+            return 
+
+        jsondata = res.json()
+        latest_release = jsondata['name']
+        if latest_release == appversion:
+            tkMessageBox.showinfo("Upgrade", f"You're already on the latest release ({appversion})")
+            return 
+
+        if tkMessageBox.askyesno("Upgrade", f'Version {latest_release} is available - do you want to upgrade?'):
+            zipname = f'https://github.com/ukmda/fbcollector/releases/download/{latest_release}/fireball_collector.zip'
+            get_response = requests.get(zipname, stream=True)
+            if get_response.status_code == 200:
+                log.info(f'retrieved {latest_release}')
+                upgrfile = os.path.join(os.getenv('TMP', default='/tmp'), f'fbcollector-{latest_release}.zip')
+                with open(os.path.join(self.dir_path, upgrfile), 'wb') as f:
+                    for chunk in get_response.iter_content(chunk_size=4096):
+                        if chunk: # filter out keep-alive new chunks
+                            f.write(chunk)
+                zf = zipfile.ZipFile(upgrfile)
+                with tempfile.TemporaryDirectory() as tempdir:
+                    zf.extractall(tempdir)
+                    flist = os.listdir(tempdir)
+                    appdir = os.path.dirname(__file__)
+                    for fl in flist:
+                        log.info(f'{tempdir} {fl}')
+                        srcfile = os.path.join(tempdir, fl)
+                        targfile = os.path.join(appdir, fl)
+                        shutil.copyfile(srcfile, targfile)
+                        if srcfile.endswith('.sh') and platform.system() !='Windows':
+                            try:
+                                os.chmod(targfile, 0o755)
+                                pass
+                            except Exception as e:
+                                pass
+                tkMessageBox.showinfo('Done','Upgrade complete, now restart the app')
+        else:
+            log.warning('unable to get upgrade package')
+            tkMessageBox.showwarning("Warning", "Unable to get upgrade, check your internet connection")
         return 
 
     def reduceCamera(self):
@@ -680,6 +710,7 @@ class fbCollector(Frame):
             tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'reduce.sh')
             shellname = 'bash'
         gotconda = 1
+        conda_exe = os.getenv('CONDA_EXE')
         with open(tmpscr, 'w') as outf:
             outf.write(f'cd {self.rms_loc}\n')
             if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
@@ -690,7 +721,7 @@ class fbCollector(Frame):
                 # initialse the conda shell
                 outf.write('eval "$(conda shell.bash hook)"\n')
             if gotconda: 
-                outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
+                outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
             else:
                 outf.write(f'python -m Utils.SkyFit2 {dirname} -c {dirname}/.config\n')
         _ = subprocess.run([shellname, tmpscr])
@@ -709,7 +740,7 @@ class fbCollector(Frame):
                             # initialse the conda shell
                             outf.write('eval "$(conda shell.bash hook)"\n')
                         if gotconda: 
-                            outf.write(f'{self.conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
+                            outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                         else:
                             outf.write(f'python -m Utils.SkyFit2 {fr} -c {dirname}/.config\n')
                     _ = subprocess.run([shellname, tmpscr])
@@ -804,7 +835,7 @@ class fbCollector(Frame):
         mcruns = 5
         max_toffset=15
         traj = solveTrajectoryGeneric(jdt_ref, meteor_list, ecsv_loc, mc_runs=mcruns, max_toffset=max_toffset, \
-            plot_all_spatial_residuals=True, show_plots=False, enable_OSM_plot=True)
+            plot_all_spatial_residuals=True, show_plots=False, enable_OSM_plot=True, show_jacchia=True)
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
         if len(fldrs) > 0:
@@ -823,7 +854,7 @@ class fbCollector(Frame):
             self.viewData()
         return 
     
-    def createGraphs(self):
+    def createGraphs(self, pickfile):
         self.statusbox.configure(text = "Creating graphs....")
         if self.wmpl_loc not in sys.path:
             sys.path.insert(0, self.wmpl_loc)
@@ -836,10 +867,25 @@ class fbCollector(Frame):
             self.statusbox.configure(text = "WMPL unavailable, can't update charts")
             return
 
+        pickdir, pickfile = os.path.split(pickfile)
+        traj=loadPickle(pickdir, pickfile)
+        dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")
+        outdir=os.path.join(self.dir_path, dir_name)
+        tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
+        traj.show_jacchia = True
+        if not hasattr(traj, 'enable_OSM_plot'):
+            traj.enable_OSM_plot = True
+        traj.savePlots(outdir, traj.file_name, show_plots=False)
+        self.statusbox.configure(text = "Done")
+        return True
+    
+    def viewSolution(self):
+        self.statusbox.configure(text = "Viewing Solution")
+        self.review_stack = False
         pickles=[]
         for path, _, files in os.walk(self.dir_path):
             for name in files:
-                if '.pickle' in name and 'tmpzip' not in path:
+                if '.pickle' in name and 'tmpzip' not in path and '_mc_' not in name:
                     pickles.append(os.path.join(path, name))
         if len(pickles) == 0:
             return False
@@ -852,25 +898,18 @@ class fbCollector(Frame):
                                         filetypes=[('pickles','*.pickle')])
         if not pickfile:
             return False
-
-        pickdir, pickfile = os.path.split(pickfile)
-        traj=loadPickle(pickdir, pickfile)
-        dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")
-        outdir=os.path.join(self.dir_path, dir_name)
-        tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
-        traj.savePlots(outdir, traj.file_name, show_plots=False)
-        self.statusbox.configure(text = "Done")
-        return True
-    
-    def viewSolution(self):
-        self.statusbox.configure(text = "Viewing Solution")
-        self.review_stack = False
+        
+        #log.info(f'outputdir is {self.soln_outputdir}')
         if not self.soln_outputdir:
+            pickfilename = os.path.basename(pickfile)
+            log.info(f'pickfile is {pickfilename}')
             solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
+            solndir = [f for f in solndir if pickfilename[:15] in f or pickfilename[:15].replace('_', '-') in f]
+            log.info(f'solndir is {solndir}')
             if len(solndir) == 0:
                 log.info('attempting to create graphs')
-                if not self.createGraphs():
+                if not self.createGraphs(pickfile):
                     tkMessageBox.showinfo('Warning', 'No solution to review')
                     return
                 solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
@@ -931,6 +970,7 @@ class fbCollector(Frame):
             if not self.getOneEcsv(current_image):
                 log.info(f' no ecsv for {current_image}')
             else:
+                self.listbox.itemconfig(img_list.index(current_image), fg = 'green')
                 numecsvs += 1
         tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
         return
@@ -958,6 +998,19 @@ class fbCollector(Frame):
         except Exception:
             return False
 
+    def hasECSV(self, ffname):
+        log.info(f'checking {ffname}')
+        if ffname[:3] == 'FF_':
+            spls = ffname.split('_')
+            camid = spls[1]
+            camdir = os.path.join(self.dir_path, camid)
+            if os.path.isdir(camdir):
+                dtstr = f'{spls[2]}_{spls[3]}_{spls[4]}'
+                ecsvs = glob.glob(os.path.join(camdir, f'{dtstr}*.ecsv'))
+                return True if len(ecsvs) > 0 else False
+        else:
+            return False
+        
     def get_bin_list(self):
         """ Get a list of image files in a given directory.
         """
@@ -992,6 +1045,8 @@ class fbCollector(Frame):
                 self.selected[line] = (0, '')
             if self.selected[line][0] == 1:
                 self.listbox.itemconfig(END, fg = 'green')
+            if self.hasECSV(line):
+                self.listbox.itemconfig(END, fg='green')
 
     def checkStacks(self):
         self.statusbox.configure(text = "Viewing Stacks")
@@ -1105,7 +1160,7 @@ class fbCollector(Frame):
         with open(checkedfile,'w') as outf:
             outf.write('\n'.join(alreadychecked))
 
-    def remove_image(self):
+    def removeImage(self):
         """ Remove the selected image from disk
         """
         current_image = self.listbox.get(ACTIVE)
@@ -1118,13 +1173,14 @@ class fbCollector(Frame):
         if self.review_stack:
             self.removeRelated(current_image)
         else:
+            os.makedirs(os.path.join(self.dir_path, 'skipped'), exist_ok=True)
             try:
-                os.remove(os.path.join(self.dir_path, 'jpgs', current_image))
+                shutil.move(os.path.join(self.dir_path, 'jpgs', current_image), os.path.join(self.dir_path, 'skipped', current_image) )
             except Exception:
                 pass
             xmlf = current_image.replace('P.jpg', '.xml')
             try:
-                os.remove(os.path.join(self.dir_path, 'jpgs', xmlf))
+                shutil.move(os.path.join(self.dir_path, 'jpgs', xmlf), os.path.join(self.dir_path, 'skipped', xmlf) )
             except Exception:
                 pass
             self.selected[current_image] = (0,'')
@@ -1161,6 +1217,60 @@ class fbCollector(Frame):
             self.imagelabel.image = None
             self.timestamp_label.configure(text = '')
             # FIXME
+        return 
+
+    def findNewImages(self):
+        fflist = []
+        dir_path = self.dir_path
+        for pth,_,ffnames in os.walk(dir_path):
+            for ffname in ffnames:
+                if 'FF_' in ffname and '.fits' in ffname:
+                    fflist.append(os.path.join(pth, ffname))
+        targdirs = []
+        newlist = []
+        for ff in fflist:
+            ffpath, ffname = os.path.split(ff)
+            if os.path.isfile(os.path.join(dir_path, 'jpgs', ffname.replace('.fits', '.jpg'))):
+                continue
+            if os.path.isfile(os.path.join(dir_path, 'skipped', ffname.replace('.fits', '.jpg'))):
+                continue
+            targdirs.append(ffpath)
+            newlist.append(ffname)
+        if len(targdirs) == 0:
+            log.info('no new images to refresh')
+            return 
+        # we have some folders to process
+        if platform.system() == 'Windows':    # Windows has to be awkward
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'tojpg.ps1')
+            shellname = 'powershell.exe'
+        else:
+            tmpscr = os.path.join(os.getenv('TMP', default='/tmp'), 'tojpg.sh')
+            shellname = 'bash'
+        gotconda = 1
+        conda_exe = os.getenv('CONDA_EXE')
+        with open(tmpscr, 'w') as outf:
+            outf.write(f'cd {self.rms_loc}\n')
+            # test if we have a python virtualenv in the standard Linux location
+            if os.path.isfile(os.path.expanduser('~/vRMS/bin/activate')):
+                outf.write('source ~/vRMS/bin/activate\n')
+                gotconda = 0
+            elif platform.system() != 'Windows':
+                # initialse the conda shell
+                outf.write('eval "$(conda shell.bash hook)"\n')
+            for targdir in targdirs:
+                    if gotconda: 
+                        outf.write(f'{conda_exe} run -n {self.rms_env} python -m Utils.BatchFFtoImage {targdir} jpg\n')
+                    else:
+                        outf.write(f'python -m Utils.BatchFFtoImage {targdir} jpg\n')
+        _ = subprocess.run([shellname, tmpscr])
+        try:
+            os.remove(tmpscr)
+        except:
+            pass
+        for srcdir, srcfile in zip(targdirs, newlist):
+            jpgname = srcfile.replace('.fits', '.jpg')
+            shutil.copyfile(os.path.join(srcdir, jpgname), os.path.join(self.dir_path, 'jpgs', jpgname))
+        self.viewData()
         return 
 
     def clean_folder(self):
