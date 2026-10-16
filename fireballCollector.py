@@ -885,7 +885,7 @@ class fbCollector(Frame):
         pickles=[]
         for path, _, files in os.walk(self.dir_path):
             for name in files:
-                if '.pickle' in name and 'tmpzip' not in path:
+                if '.pickle' in name and 'tmpzip' not in path and '_mc_' not in name:
                     pickles.append(os.path.join(path, name))
         if len(pickles) == 0:
             return False
@@ -901,9 +901,12 @@ class fbCollector(Frame):
         
         #log.info(f'outputdir is {self.soln_outputdir}')
         if not self.soln_outputdir:
+            pickfilename = os.path.basename(pickfile)
+            log.info(f'pickfile is {pickfilename}')
             solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
-            solndir = [f for f in solndir if pickfile[:15] in f]
+            solndir = [f for f in solndir if pickfilename[:15] in f or pickfilename[:15].replace('_', '-') in f]
+            log.info(f'solndir is {solndir}')
             if len(solndir) == 0:
                 log.info('attempting to create graphs')
                 if not self.createGraphs(pickfile):
@@ -967,6 +970,7 @@ class fbCollector(Frame):
             if not self.getOneEcsv(current_image):
                 log.info(f' no ecsv for {current_image}')
             else:
+                self.listbox.itemconfig(img_list.index(current_image), fg = 'green')
                 numecsvs += 1
         tkMessageBox.showinfo('Info', f'Retrieved {numecsvs} ECSVs')
         return
@@ -994,6 +998,19 @@ class fbCollector(Frame):
         except Exception:
             return False
 
+    def hasECSV(self, ffname):
+        log.info(f'checking {ffname}')
+        if ffname[:3] == 'FF_':
+            spls = ffname.split('_')
+            camid = spls[1]
+            camdir = os.path.join(self.dir_path, camid)
+            if os.path.isdir(camdir):
+                dtstr = f'{spls[2]}_{spls[3]}_{spls[4]}'
+                ecsvs = glob.glob(os.path.join(camdir, f'{dtstr}*.ecsv'))
+                return True if len(ecsvs) > 0 else False
+        else:
+            return False
+        
     def get_bin_list(self):
         """ Get a list of image files in a given directory.
         """
@@ -1028,6 +1045,8 @@ class fbCollector(Frame):
                 self.selected[line] = (0, '')
             if self.selected[line][0] == 1:
                 self.listbox.itemconfig(END, fg = 'green')
+            if self.hasECSV(line):
+                self.listbox.itemconfig(END, fg='green')
 
     def checkStacks(self):
         self.statusbox.configure(text = "Viewing Stacks")
