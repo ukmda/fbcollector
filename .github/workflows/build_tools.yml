@@ -57,4 +57,4 @@ jobs:
           file: .\fireball_collector.zip
           tags: true
           overwrite: true
-          tag_name: 2026.10.0
+          tag_name: 2026.10.1
