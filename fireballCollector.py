@@ -782,7 +782,7 @@ class fbCollector(Frame):
         mcruns = 5
         max_toffset=15
         traj = solveTrajectoryGeneric(jdt_ref, meteor_list, ecsv_loc, mc_runs=mcruns, max_toffset=max_toffset, \
-            plot_all_spatial_residuals=True, show_plots=False, enable_OSM_plot=True)
+            plot_all_spatial_residuals=True, show_plots=False, enable_OSM_plot=True, show_jacchia=True)
         fldrs = os.listdir(ecsv_loc)
         fldrs = [f for f in fldrs if os.path.isdir(os.path.join(ecsv_loc, f))]
         if len(fldrs) > 0:
@@ -801,7 +801,7 @@ class fbCollector(Frame):
             self.viewData()
         return 
     
-    def createGraphs(self):
+    def createGraphs(self, pickfile):
         self.statusbox.configure(text = "Creating graphs....")
         if self.wmpl_loc not in sys.path:
             sys.path.insert(0, self.wmpl_loc)
@@ -814,6 +814,19 @@ class fbCollector(Frame):
             self.statusbox.configure(text = "WMPL unavailable, can't update charts")
             return
 
+        pickdir, pickfile = os.path.split(pickfile)
+        traj=loadPickle(pickdir, pickfile)
+        dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")
+        outdir=os.path.join(self.dir_path, dir_name)
+        tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
+        traj.show_jacchia = True
+        traj.savePlots(outdir, traj.file_name, show_plots=False)
+        self.statusbox.configure(text = "Done")
+        return True
+    
+    def viewSolution(self):
+        self.statusbox.configure(text = "Viewing Solution")
+        self.review_stack = False
         pickles=[]
         for path, _, files in os.walk(self.dir_path):
             for name in files:
@@ -830,25 +843,15 @@ class fbCollector(Frame):
                                         filetypes=[('pickles','*.pickle')])
         if not pickfile:
             return False
-
-        pickdir, pickfile = os.path.split(pickfile)
-        traj=loadPickle(pickdir, pickfile)
-        dir_name=jd2Date(traj.jdt_ref, dt_obj=True).strftime("%Y%m%d-%H%M%S.%f")
-        outdir=os.path.join(self.dir_path, dir_name)
-        tmppy = os.path.join(os.getenv('TMP', default='/tmp'), 'docharts.py')
-        traj.savePlots(outdir, traj.file_name, show_plots=False)
-        self.statusbox.configure(text = "Done")
-        return True
-    
-    def viewSolution(self):
-        self.statusbox.configure(text = "Viewing Solution")
-        self.review_stack = False
+        
+        #log.info(f'outputdir is {self.soln_outputdir}')
         if not self.soln_outputdir:
             solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
             solndir = [f for f in solndir if os.path.isdir(os.path.join(self.dir_path, f))]
+            solndir = [f for f in solndir if pickfile[:15] in f]
             if len(solndir) == 0:
                 log.info('attempting to create graphs')
-                if not self.createGraphs():
+                if not self.createGraphs(pickfile):
                     tkMessageBox.showinfo('Warning', 'No solution to review')
                     return
                 solndir = glob.glob(os.path.split(self.dir_path)[1][:8]+'*', root_dir=self.dir_path)
