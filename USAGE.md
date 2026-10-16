@@ -24,7 +24,7 @@ The tool can retrieve images from the UKMON livestream up for to a month in the 
   
 * Go through the image list and press the `Delete` key to delete any that you are not interested in. 
 
-* Once you've whittled the list down to just the interesting events, you can select `Get ECSVs` from the `Raw` menu. This will attempt to get raw meteor track data for each image in [ECSV](https://docs.astropy.org/en/stable/api/astropy.io.ascii.Ecsv.html) format. 
+* Once you've whittled the list down to just the interesting events, you can select `Get ECSVs` from the `Raw` menu. This will attempt to get raw meteor track data for each image in [ECSV](https://docs.astropy.org/en/stable/api/astropy.io.ascii.Ecsv.html) format. Files with ECSVs will be highlighted in green.
   
 * You can also click `Get Videos` to collect any video data thats available. 
 
