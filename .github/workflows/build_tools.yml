@@ -47,7 +47,7 @@ jobs:
   release_fbtool:
     name: release fbcollector
     runs-on: windows-latest
-    needs: [local_tests, build_fbtool]
+    needs: [local_tests]
     if: github.ref == 'refs/heads/master'
     steps: 
       - name: checkout
