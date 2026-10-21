@@ -39,7 +39,7 @@ from PIL import ImageTk
 from gmnCollector import scpconn
 
 
-appversion = "2026.10.1"
+appversion = "2026.10.2"
 
 dir_  = ''
 config_file = ''
@@ -537,7 +537,7 @@ class fbCollector(Frame):
         rawMenu.add_command(label="Refresh Images", command=self.findNewImages)
         rawMenu.add_separator()
         rawMenu.add_command(label="Get ECSVs", command=self.getRequestedECSVs)
-        rawMenu.add_command(label="Excl/Incl ECSV", command=self.ignoreCamera)
+        rawMenu.add_command(label="Toggle ECSV (x)", command=self.ignoreECSV)
         rawMenu.add_command(label="Reduce Selected Image", command=self.reduceCamera, state=rmsavailable)
         rawMenu.add_separator()
         rawMenu.add_command(label="Share Raw Data", command=self.uploadRaw, state=shareavailable)
@@ -607,8 +607,9 @@ class fbCollector(Frame):
         self.listbox.bind('<<ListboxSelect>>', self.update_image)
         self.scrollbar.config(command = self.listbox.yview)
 
-        # bind delete key
+        # bind some keys
         self.listbox.bind("<Delete>", lambda x: self.removeImage())
+        self.listbox.bind("x", lambda x: self.ignoreECSV())
 
         # IMAGE
         try:
@@ -755,41 +756,6 @@ class fbCollector(Frame):
 
         return
     
-    def ignoreCamera(self):
-        current_image = self.listbox.get(ACTIVE)
-        if current_image == '':
-            return 
-        camid = current_image[3:9]
-        log.info(f'selected camera is {camid}')
-        dirname = os.path.join(self.dir_path, camid)
-        allecsvs = glob.glob(os.path.join(dirname, '*.ecsv'))
-        ecsvs = [e for e in allecsvs if 'REJECT' not in e.upper()]
-        rejs = [e for e in allecsvs if 'REJECT' in e.upper()]
-        if len(ecsvs) == 0 and len(rejs) == 0:
-            log.info('no files to reject or include')
-            return 
-        elif len(ecsvs) > 0 and len(rejs) == 0:
-            for ecsv in ecsvs:
-                os.rename(ecsv, ecsv.replace('.ecsv','_REJECT.ecsv'))
-            jpgnames = glob.glob(os.path.join(self.dir_path, 'jpgs', current_image))
-            for jpgname in jpgnames:
-                os.rename(jpgname, jpgname.replace('.jpg','_REJECT.jpg'))
-        elif len(ecsvs) == 0 and len(rejs) > 0:
-            for rej in rejs: 
-                os.rename(rej, rej.replace('_REJECT.ecsv','.ecsv'))
-            jpgnames = glob.glob(os.path.join(self.dir_path, 'jpgs', current_image))
-            for jpgname in jpgnames:
-                os.rename(jpgname, jpgname.replace('_REJECT.jpg','.jpg'))
-        else:
-            # more than one ECSV or REJ file to handle, urk
-            log.info('urk')
-            return 
-        bin_list = [line for line in os.listdir(os.path.join(self.dir_path, 'jpgs')) if self.correct_datafile_name(line)]
-        for b in bin_list:
-            self.selected[b] = (0, '')
-        self.update_listbox(bin_list)
-        return
-    
     def solveOrbit(self):
         if self.wmpl_loc not in sys.path:
             sys.path.insert(0, self.wmpl_loc)
@@ -813,7 +779,7 @@ class fbCollector(Frame):
         os.makedirs(ecsv_loc, exist_ok=True)
         for entry in sorted(os.walk(self.dir_path), key=lambda x: x[0]):
             dir_name, _, file_names = entry
-            if 'ecsvs' in dir_name:
+            if 'ecsvs' in dir_name or 'skipped' in dir_name:
                 continue
             for fn in file_names:
                 if fn.lower().endswith(".ecsv"):
@@ -963,6 +929,54 @@ class fbCollector(Frame):
         self.update_listbox(bin_list)
         return 
     
+    def ignoreECSV(self):
+        current_image = self.listbox.get(ACTIVE)
+        if current_image == '':
+            return 
+        ecsv = self.hasECSV(current_image)
+        if ecsv: 
+            # there's an ECSV corresponding to this FF file
+            # in the camera folder, so we need to move it to 'skipped'
+            log.info(f'skipping {ecsv}')
+            targname = os.path.join(self.dir_path, 'skipped', os.path.basename(ecsv))
+            shutil.move(ecsv, targname)
+            pass
+        else:
+            # check if there's an ECSV in the skipped folder 
+            # and if so, move it back and highlight it
+            skipped_ecsv = self.hasECSV(current_image, camid='skipped')
+            if skipped_ecsv:
+                log.info(f'enabling {skipped_ecsv}')
+                camid = current_image.split('_')[1]
+                targname = os.path.join(self.dir_path, camid, os.path.basename(skipped_ecsv))
+                shutil.move(skipped_ecsv, targname)
+                pass
+            else:
+                log.info(f'no ECSV for {current_image} so nothing to skip or include')
+                return 
+        self.viewData()
+        return
+    
+    def hasECSV(self, ffname, camid=None):
+        #log.info(f'checking {ffname}')
+        if ffname[:3] == 'FF_':
+            spls = ffname.split('_')
+            if not camid:
+                camid = spls[1]
+            camdir = os.path.join(self.dir_path, camid)
+            if os.path.isdir(camdir):
+                evtdt = datetime.datetime.strptime(f'{spls[2]}_{spls[3]}_{spls[4]}000', '%Y%m%d_%H%M%S_%f')
+                dtstr = f'{spls[2]}_{spls[3]}_{spls[4]}'
+                ecsvs = glob.glob(os.path.join(camdir, f'{dtstr}*.ecsv'))
+                if len(ecsvs) > 0: 
+                    return ecsvs[0]
+                ecsvs2 = glob.glob(os.path.join(camdir, f'{evtdt.strftime("%Y-%m-%dT%H_%M_%S")}*.ecsv'))
+                if len(ecsvs2) > 0: 
+                    return ecsvs2[0]
+                return None
+        else:
+            return None
+
     def getRequestedECSVs(self):
         img_list = self.get_bin_list()
         numecsvs = 0
@@ -998,19 +1012,6 @@ class fbCollector(Frame):
         except Exception:
             return False
 
-    def hasECSV(self, ffname):
-        log.info(f'checking {ffname}')
-        if ffname[:3] == 'FF_':
-            spls = ffname.split('_')
-            camid = spls[1]
-            camdir = os.path.join(self.dir_path, camid)
-            if os.path.isdir(camdir):
-                dtstr = f'{spls[2]}_{spls[3]}_{spls[4]}'
-                ecsvs = glob.glob(os.path.join(camdir, f'{dtstr}*.ecsv'))
-                return True if len(ecsvs) > 0 else False
-        else:
-            return False
-        
     def get_bin_list(self):
         """ Get a list of image files in a given directory.
         """
@@ -1046,7 +1047,7 @@ class fbCollector(Frame):
             if self.selected[line][0] == 1:
                 self.listbox.itemconfig(END, fg = 'green')
             if self.hasECSV(line):
-                self.listbox.itemconfig(END, fg='green')
+                self.listbox.itemconfig(END, fg = 'green')
 
     def checkStacks(self):
         self.statusbox.configure(text = "Viewing Stacks")
@@ -1074,11 +1075,11 @@ class fbCollector(Frame):
             dir_path = self.dir_path
         if platform.system() == 'Windows':    # Windows has to be awkward
             dir_path = dir_path.replace("/","\\")
-            log.info(f'target path is {dir_path}')
-            os.startfile(dir_path)
+            cmd = 'explorer.exe'
         else:
-            log.info(f'target path is {dir_path}')
-            subprocess.run(['open',dir_path])
+            cmd = 'open'
+        log.info(f'target path is {dir_path}')
+        subprocess.run([cmd,dir_path])
         return 
     
     def viewLogs(self):
