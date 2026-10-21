@@ -934,11 +934,14 @@ class fbCollector(Frame):
         if current_image == '':
             return 
         ecsv = self.hasECSV(current_image)
+        os.makedirs(os.path.join(self.dir_path, 'skipped'), exist_ok=True)
         if ecsv: 
             # there's an ECSV corresponding to this FF file
             # in the camera folder, so we need to move it to 'skipped'
             log.info(f'skipping {ecsv}')
             targname = os.path.join(self.dir_path, 'skipped', os.path.basename(ecsv))
+            targname = targname.replace('/','\\')
+            ecsv = ecsv.replace('/','\\')
             shutil.move(ecsv, targname)
             pass
         else:
@@ -949,6 +952,8 @@ class fbCollector(Frame):
                 log.info(f'enabling {skipped_ecsv}')
                 camid = current_image.split('_')[1]
                 targname = os.path.join(self.dir_path, camid, os.path.basename(skipped_ecsv))
+                targname = targname.replace('/','\\')
+                skipped_ecsv = skipped_ecsv.replace('/','\\')
                 shutil.move(skipped_ecsv, targname)
                 pass
             else:
