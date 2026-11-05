@@ -39,7 +39,7 @@ from PIL import ImageTk
 from gmnCollector import scpconn
 
 
-appversion = "2026.10.2"
+appversion = "2026.11.0"
 
 dir_  = ''
 config_file = ''
@@ -1138,11 +1138,15 @@ class fbCollector(Frame):
     
     def removeRelated(self, imgname):
         camid = imgname[:6]
-        mp4s = os.listdir(os.path.join(self.dir_path, 'mp4s'))
+        mp4s = []
+        if os.path.isdir(os.path.join(self.dir_path, 'mp4s')):
+            mp4s = os.listdir(os.path.join(self.dir_path, 'mp4s'))
         badones = [x for x in mp4s if camid in x]
         for ba in badones:
             os.remove(os.path.join(self.dir_path, 'mp4s', ba))
-        jpgs = os.listdir(os.path.join(self.dir_path, 'jpgs'))
+        jpgs = []
+        if os.path.isdir(os.path.join(self.dir_path, 'jpgs')):
+            jpgs = os.listdir(os.path.join(self.dir_path, 'jpgs'))
         badones = [x for x in jpgs if camid in x]
         for ba in badones:
             os.remove(os.path.join(self.dir_path, 'jpgs', ba))
@@ -1499,6 +1503,7 @@ class fbCollector(Frame):
         conn.getEventsByRegion('UK', evtdate, self.basedir, os.path.join(self.dir_path,'checked.txt'), False)
         conn.finish()
         tkMessageBox.showinfo("Info", 'Done')
+        self.checkStacks()
         return 
 
     def getGMNData(self):

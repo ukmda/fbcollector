@@ -14,10 +14,9 @@ matplotlib
 numpy < 2.0
 cython
 scipy
-matplotlib
 jplephem
 pyephem
-basemap
+basemap == 1.4.1
 PyQt5 ; platform_machine != 'aarch64'
 pyyaml
 pyswarms
