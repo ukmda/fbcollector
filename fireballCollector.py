@@ -39,7 +39,7 @@ from PIL import ImageTk
 from gmnCollector import scpconn
 
 
-appversion = "2026.10.2"
+appversion = "2026.11.0"
 
 dir_  = ''
 config_file = ''
