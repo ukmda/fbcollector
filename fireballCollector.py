@@ -683,6 +683,8 @@ class fbCollector(Frame):
                             except Exception as e:
                                 pass
                 tkMessageBox.showinfo('Done','Upgrade complete, now restart the app')
+            else:
+                log.warning(f'problem retrieving upgrade package {zipname}, error {get_response.status_code}')
         else:
             log.warning('unable to get upgrade package')
             tkMessageBox.showwarning("Warning", "Unable to get upgrade, check your internet connection")
