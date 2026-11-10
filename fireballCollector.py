@@ -30,7 +30,7 @@ import tkinter.filedialog as tkFileDialog
 import tkinter.messagebox as tkMessageBox
 from tkinter.simpledialog import Dialog
 from tkinter.simpledialog import askstring
-from tkinter import StringVar, Frame, ACTIVE, END, Listbox, Menu, Entry, Button
+from tkinter import StringVar, Frame, ACTIVE, END, Listbox, Menu, Entry, Button, Radiobutton
 from tkinter.ttk import Label, Style, LabelFrame, Scrollbar
 
 from PIL import Image as img
@@ -437,6 +437,13 @@ class fbCollector(Frame):
         if localcfg.has_option('sharing','shrfldr'):
             self.share_loc = os.path.expanduser(localcfg['sharing']['shrfldr'].replace('$HOME','~')).replace('\\','/')
 
+        self.regions = {}
+        if localcfg.has_section('regions'):
+            for k in localcfg['regions'].keys():
+                self.regions[k.upper()] = (localcfg['regions'][k]).split(',')
+            pass
+        else:
+            self.regions = {'UK':{'UK','BE','IE','NL'}}
         return 
 
     def quitApplication(self):
@@ -589,10 +596,19 @@ class fbCollector(Frame):
         self.newpatt = StringVar()
         self.newpatt.set(self.patt)
 
-        self.patt_entry = StyledEntry(self.save_panel, textvariable = self.newpatt, width = 20)
+        self.patt_entry = StyledEntry(self.save_panel, textvariable = self.newpatt, width = 25)
         self.patt_entry.grid(row = 1, column = 1, columnspan = 2, sticky = "W")
-        save_bmp = StyledButton(self.save_panel, text="Get Images", width = 8, command = lambda: self.getData())
-        save_bmp.grid(row = 1, column = 3)
+
+        self.reg_panel = LabelFrame(self, text=' Region Selection ')
+        self.reg_panel.grid(row=3, columnspan=2, sticky='WE')
+
+        self.selected_region = StringVar()
+        self.selected_region.set('UK')
+        for i, reg in enumerate(self.regions):
+            if i > 5: 
+                break
+            butt = Radiobutton(self.reg_panel, text=reg, value=reg, variable=self.selected_region)
+            butt.grid(row=1, column=i+1)
 
         self.statusbox = Label(self, text = "Ready", font=("Courier", 12))
         self.statusbox.grid(row = 1, column = 5)
@@ -601,8 +617,8 @@ class fbCollector(Frame):
         self.scrollbar = Scrollbar(self)
         self.listbox = Listbox(self, width = 47, yscrollcommand=self.scrollbar.set, exportselection=0, activestyle = "none", bg = global_bg, fg = global_fg)
         self.listbox.config(height = 25)  # Listbox size
-        self.listbox.grid(row = 4, column = 0, rowspan = 7, columnspan = 2, sticky = "NS")  # Listbox position
-        self.scrollbar.grid(row = 4, column = 2, rowspan = 7, sticky = "NS")  # Scrollbar size
+        self.listbox.grid(row = 5, column = 0, rowspan = 7, columnspan = 2, sticky = "NS")  # Listbox position
+        self.scrollbar.grid(row = 5, column = 2, rowspan = 7, sticky = "NS")  # Scrollbar size
 
         self.listbox.bind('<<ListboxSelect>>', self.update_image)
         self.scrollbar.config(command = self.listbox.yview)
@@ -1101,22 +1117,33 @@ class fbCollector(Frame):
         if self.dir_path == self.fb_dir.strip():
             self.loadFolder()
         if self.dir_path is not None and self.dir_path != self.fb_dir:
+            _, fldr = os.path.split(os.path.normpath(self.dir_path))
+            yr = fldr[:4]
+            archdir = os.path.join(self.fb_dir, yr)
+            zfname = f'{os.path.join(archdir, fldr)}.zip'
             try:
-                _, fldr = os.path.split(os.path.normpath(self.dir_path))
-                yr = fldr[:4]
-                archdir = os.path.join(self.fb_dir, yr)
-                os.makedirs(archdir, exist_ok=True)
-                zfname = os.path.join(archdir, fldr)
-                shutil.make_archive(zfname,'zip',self.fb_dir, fldr)
+                with zipfile.ZipFile(zfname,'w') as zf:
+                    os.makedirs(archdir, exist_ok=True)
+                    for root, dirs, files in os.walk(self.dir_path):
+                        for name in files:
+                            full_name = os.path.join(root, name)
+                            arch_name = full_name.replace(self.dir_path, '')
+                            if arch_name[0]=='\\' or arch_name[0]=='/':
+                                arch_name = arch_name[1:]
+                            if '.bz2' not in arch_name and '.zip' not in arch_name:
+                                zf.write(full_name, arcname=arch_name)
+                            else:
+                                log.info(f'skipping {arch_name}')
+                    log.info(f'archived to {zfname}')
+                try:
+                    shutil.rmtree(self.dir_path)
+                    pass
+                except Exception as e:
+                    log.warning(f'unable to remove folder {self.dir_path}, please do it manually')
+                    log.warning(e)
             except Exception as e:
-                log.warning(f'unable to create archive {self.dir_path}')
+                log.warning(f'unable to create archive {zfname}')
                 log.warning(e)
-            try:
-                shutil.rmtree(self.dir_path)
-            except Exception as e:
-                log.warning(f'unable to remove folder, please do it manually {self.dir_path}')
-                log.warning(e)
-                self.dir_path = self.fb_dir
         self.dir_path = self.fb_dir
         self.viewData()
 
@@ -1497,12 +1524,15 @@ class fbCollector(Frame):
             ret = tkMessageBox.askyesno("Wait", f'Should wait till {self.evtMonTriggered.strftime("%H:%M:%S")} - continue anyway?')
             if ret is False:
                 return
+        region = self.selected_region.get()
+        log.info(f'selected region is {region}')
+        log.info(f'countries are {self.regions[region]}')
         log.info(f'getting data for {evtdate}')
         conn = scpconn(self.basedir, self.gmn_server, self.gmn_user, self.gmn_key)
         if not conn.initialised:
             log.info('unable to connect to GMN')
             return 
-        conn.getEventsByRegion('UK', evtdate, self.basedir, os.path.join(self.dir_path,'checked.txt'), False)
+        conn.getEventsByRegion(self.regions[region], evtdate, self.basedir, os.path.join(self.dir_path,'checked.txt'), False)
         conn.finish()
         tkMessageBox.showinfo("Info", 'Done')
         self.checkStacks()

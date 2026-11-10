@@ -110,17 +110,9 @@ class scpconn():
         for stat in statlist:
             self.getEventFileByStation(stat, eventdt, basedir, skipfile, skipsftp)
 
-    def getEventsByRegion(self, region, eventdt, basedir, skipfile, skipsftp=False):
-        if region == 'Europe':
-            ctrylist = ['FR','DE','ES','CH','IT','CZ','PT','HR','SK']
-        elif region == 'NorthAmerica':
-            ctrylist = ['US','CA','MX']
-        elif region == 'AusNZ':
-            ctrylist = ['AU','NZ']
-        else:
-            ctrylist = ['UK','IE','NL','BE']
-
+    def getEventsByRegion(self, ctrylist, eventdt, basedir, skipfile, skipsftp=False):
         for ctry in ctrylist:
+            print(ctry)
             self.getEventsByCountry(ctry, eventdt, basedir, skipfile, skipsftp)
 
 
