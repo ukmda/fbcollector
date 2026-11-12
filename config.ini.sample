@@ -18,7 +18,6 @@ gmnserver = gmn.uwo.ca
 
 [ukmon]
 apikey = 
-profile = 
 
 [regions]
 uk = UK,IE,BE,NL

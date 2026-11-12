@@ -1122,7 +1122,9 @@ class fbCollector(Frame):
             archdir = os.path.join(self.fb_dir, yr)
             zfname = f'{os.path.join(archdir, fldr)}.zip'
             try:
-                with zipfile.ZipFile(zfname,'w') as zf:
+                # avoid overwriting existing archive files
+                openmode = 'a' if os.path.isfile(zfname) else 'w'
+                with zipfile.ZipFile(zfname, openmode) as zf:
                     os.makedirs(archdir, exist_ok=True)
                     for root, dirs, files in os.walk(self.dir_path):
                         for name in files:
@@ -1140,6 +1142,7 @@ class fbCollector(Frame):
                     pass
                 except Exception as e:
                     log.warning(f'unable to remove folder {self.dir_path}, please do it manually')
+                    tkMessageBox.showinfo('Warning', 'Data archived but unable to remove folder, \nplease do it manually')
                     log.warning(e)
             except Exception as e:
                 log.warning(f'unable to create archive {zfname}')
@@ -1182,15 +1185,20 @@ class fbCollector(Frame):
         fldrs = os.listdir(self.dir_path)
         badones = [x for x in fldrs if camid in x]
         for ba in badones:
-            try:
-                shutil.rmtree(os.path.join(self.dir_path, ba))
-            except Exception:
-                os.remove(os.path.join(self.dir_path, ba))
+            targdir = os.path.join(self.dir_path, ba)
+            if os.path.isdir(targdir):
+                for fil in os.listdir(targdir):
+                    os.remove(os.path.join(targdir, fil))
+                try:
+                    os.rmdir(targdir)
+                except Exception:
+                    pass
         evtdate = self.newpatt.get().strip()
         bz2file = os.path.join(self.dir_path, f'{camid}_{evtdate}_event.tar.bz2')
         if os.path.isfile(bz2file):
             os.remove(bz2file)
-        os.remove(os.path.join(self.dir_path, 'stacks', imgname))
+        if os.path.isfile(os.path.join(self.dir_path, 'stacks', imgname)):
+            os.remove(os.path.join(self.dir_path, 'stacks', imgname))
         alreadychecked = [] 
         checkedfile = os.path.join(self.dir_path,'checked.txt')
         if os.path.isfile(checkedfile):
@@ -1323,6 +1331,7 @@ class fbCollector(Frame):
         datalist = [x for x in datalist if os.path.basename(x)[0:2].isupper()]
 
         # now remove any folders that aren't being kept
+        eventdt = os.path.basename(self.dir_path)
         for d in datalist:
             stationid = os.path.basename(d)
             if stationid in camlist:
@@ -1330,7 +1339,6 @@ class fbCollector(Frame):
             log.info(f'removing {d}')
             shutil.rmtree(d, ignore_errors=True)
             # remove any corresponding bz2 file
-            eventdt = self.newpatt.get().strip()
             bz2file = os.path.join(self.dir_path, f'{stationid.upper()}_{eventdt}_event.tar.bz2')
             log.info(f'removing {bz2file}')
             if os.path.isfile(bz2file):
